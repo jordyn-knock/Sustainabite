@@ -1,6 +1,6 @@
 import streamlit as st
 from PIL import Image
-
+#this is the main page 
 st.title("I'm Hungry")
 st.write("Upload an image of your ingredients and get a recipe!") # or whatever you want to write here
 

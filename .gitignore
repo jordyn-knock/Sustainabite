@@ -172,3 +172,24 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Virtual Environment
+food_recognition_env/
+*venv/
+env/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+
+# Large model files
+models/saved_models/
+
+# Data files (decide if you want to share these or not)
+data/raw/
+data/processed/
+
+# Local configuration
+.env

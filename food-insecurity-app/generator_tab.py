@@ -9,6 +9,10 @@ def render_generator_tab():
     prefs = get_user_preferences()
     st.header("📸 Upload Ingredients")
 
+    # Default fallback values
+    combined_ingredients = []
+    use_substitutes = False
+
     uploaded_files = st.file_uploader(
         "Upload images of your ingredients",
         type=["jpg", "jpeg", "png"],
@@ -27,23 +31,30 @@ def render_generator_tab():
             custom = [x.strip().lower() for x in user_corrections.split(",")]
             detected_ingredients = list(set(detected_ingredients + custom))
 
+        use_substitutes = st.checkbox("I'm willing to accept substitutes")
+
         # Pantry + optional grocery
         combined_ingredients = detected_ingredients + st.session_state.get("pantry", [])
-        if st.session_state.get("use_grocery", False):
+        if prefs.get("use_grocery", False):
             combined_ingredients += st.session_state.get("grocery", [])
 
         st.markdown("### Final Ingredients Being Used:")
         st.write(", ".join(set(combined_ingredients)))
 
+    # Always show the button
     if st.button("Generate Recipe"):
-        results = find_recipes(final_ingredients, prefs)
+        if not combined_ingredients:
+            st.warning("Please upload an image and confirm your ingredients before generating.")
+            return
+
+        results = find_recipes(combined_ingredients, prefs, use_substitutes=use_substitutes)
 
         if results.empty:
             st.warning("No matching recipes found.")
         else:
             for idx, row in results.iterrows():
                 st.subheader(row['name'])
-                st.write(f"**Time:** {row['time-to-make']} mins")
+                st.write(f"**Time:** {row['estimated_time']} mins")
                 st.write("### Ingredients")
                 st.write(", ".join(row['ingredients']))
                 st.write("### Steps")
@@ -58,11 +69,10 @@ def render_generator_tab():
                         "name": row['name'],
                         "ingredients": row['ingredients'],
                         "steps": row['steps'],
-                        "time": row['time-to-make'],
-                        "cuisine": prefs['cuisine']  # or row['tags'][0] if you prefer
+                        "time": row['estimated_time'],
+                        "cuisine": prefs['cuisine']
                     }
 
                     st.session_state.favourites.append(recipe)
                     save_favourites(st.session_state.favourites)
                     st.success(f"{recipe['name']} saved to favourites!")
-

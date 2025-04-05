@@ -27,10 +27,13 @@ def get_user_preferences():
         horizontal=True
     )
 
+    use_grocery = st.checkbox("I'm willing to go to the grocery store to get missing ingredients.")
+
     return {
         "servings": servings,
         "max_time": max_time,
         "cuisine": cuisine,
-        "meal_type": meal_type
+        "meal_type": meal_type,
+        "use_grocery": use_grocery
     }
 

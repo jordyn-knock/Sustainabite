@@ -55,4 +55,4 @@ def render_pantry_tab():
             st.experimental_rerun() #this is what forces the app to update, so do not remove it
 
     st.markdown("---")
-    st.checkbox("I'm willing to go to the grocery store.", key="use_grocery")
+

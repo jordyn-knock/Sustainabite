@@ -54,7 +54,7 @@ meal_type_tags = {
     "Snack": ["snack", "appetizer", "side dish"]
 }
 
-def find_recipes(ingredients_input, preferences, top_n=5):
+def find_recipes(ingredients_input, preferences, use_substitutes=False, top_n=5):
     max_time = preferences["max_time"]
     cuisine = preferences["cuisine"]
     meal_type = preferences["meal_type"]
@@ -68,7 +68,7 @@ def find_recipes(ingredients_input, preferences, top_n=5):
 
         # Filter by cuisine
         if cuisine != "Not applicable":
-            if not any(cuisine.lower() in tag.lower() for tag in row['tags']):
+            if not any(cuisine.lower() == tag.lower() for tag in row['tags']):
                 continue
 
         # Filter by meal type
@@ -76,15 +76,22 @@ def find_recipes(ingredients_input, preferences, top_n=5):
         if not any(tag.lower() in row['tags'] for tag in type_tags):
             continue
 
-        # Filter by ingredients
-        ingredient_match = all(
-            ing.lower() in [i.lower() for i in ingredients_input]
-            for ing in row['ingredients']
-        )
+        # Ingredient matching
+        recipe_ingredients = [i.lower() for i in row['ingredients']]
+        user_ingredients = [i.lower() for i in ingredients_input]
+
+        if use_substitutes:
+            # Accept partial match (60% or more)
+            match_count = sum(1 for ing in recipe_ingredients if ing in user_ingredients)
+            match_ratio = match_count / len(recipe_ingredients) if recipe_ingredients else 0
+            ingredient_match = match_ratio >= 0.6
+        else:
+            # Strict match (all ingredients must be available)
+            ingredient_match = all(ing in user_ingredients for ing in recipe_ingredients)
+
         if not ingredient_match:
             continue
 
         matches.append(row)
 
     return pd.DataFrame(matches).head(top_n)[['name', 'ingredients', 'estimated_time', 'steps']]
-

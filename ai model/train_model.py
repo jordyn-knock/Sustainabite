@@ -3,152 +3,144 @@ import ast
 import re
 import pickle
 import numpy as np
+import json
+from typing import List
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from tensorflow.keras.utils import to_categorical
 import tensorflow as tf
-from tensorflow.keras.layers import Input, Dense, Concatenate
-from tensorflow.keras.models import Model  
+from tensorflow.keras.layers import Input, Dense, Embedding, GlobalAveragePooling1D, Concatenate
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import TextVectorization
+from tensorflow.keras.utils import to_categorical
 
-# Load the CSV file
+# -----------------------------
+# Define safe_eval function
+# -----------------------------
+def safe_eval(obj) -> List[str]:
+    """Convert a stringified list to a real list.
+    
+    Silently handles NaN/None/invalid values by returning [].
+    Tries ast.literal_eval first, then a JSON fallback.
+    """
+    if obj is None or (isinstance(obj, float) and pd.isna(obj)):
+        return []
+    if isinstance(obj, list):
+        return obj
+
+    text = str(obj)
+    try:
+        return ast.literal_eval(text)
+    except (ValueError, SyntaxError):
+        pass  # fall through to JSON
+    try:
+        json_text = text.replace("'", '"')
+        return json.loads(json_text)
+    except json.JSONDecodeError:
+        return []
+
+# -----------------------------
+# Step 1: Load and Preprocess Data
+# -----------------------------
 df = pd.read_csv('ai model/recipes_ingredients.csv')
 print("Raw data preview:")
 print(df.head())
 
-#Rename the needed columns
-recipes = df[['id', 'name', 'tags', 'ingredients', 'ingredients_raw', 'steps', 'servings']]
+# Select needed columns
+recipes = df[['id', 'name', 'ingredients', 'ingredients_raw', 'steps', 'servings']]
 
-for col in ['tags', 'ingredients', 'ingredients_raw', 'steps']:
+# Fill missing values for text columns with "[]"
+for col in ['ingredients', 'ingredients_raw', 'steps']:
     recipes[col] = recipes[col].fillna("[]")
 
-# Define a safe literal_eval function
-def safe_literal_eval(val):
-    try:
-        return ast.literal_eval(val)
-    except Exception as e:
-        print(f"Warning: literal_eval failed on value: {val}\nError: {e}")
-        return []
+# Safely convert stringified lists to actual lists
+recipes['ingredients'] = recipes['ingredients'].apply(safe_eval)
+recipes['ingredients_raw'] = recipes['ingredients_raw'].apply(safe_eval)
+recipes['steps'] = recipes['steps'].apply(safe_eval)
 
-# Fill missing values in columns that should be stringified lists
-for col in ['tags', 'ingredients', 'ingredients_raw', 'steps']:
-    recipes[col] = recipes[col].fillna("[]")
+# Create text versions by joining list elements
+def join_text(lst):
+    return " ".join(lst)
 
-# Convert stringified lists to actual lists safely
-recipes['tags'] = recipes['tags'].apply(safe_literal_eval)
-recipes['ingredients'] = recipes['ingredients'].apply(safe_literal_eval)
-recipes['ingredients_raw'] = recipes['ingredients_raw'].apply(safe_literal_eval)
-recipes['steps'] = recipes['steps'].apply(safe_literal_eval)
+recipes['ingredients_text'] = recipes['ingredients'].apply(join_text)
+recipes['ingredients_raw_text'] = recipes['ingredients_raw'].apply(join_text)
+recipes['steps_text'] = recipes['steps'].apply(join_text)
 
-# Extract the time-to-make from the tags.
-def extract_time_from_tags(tags):
-    # Look for the tag 'time-to-make' and assume the next tag holds a time range (e.g., '60-to-90-minutes')
-    for i, tag in enumerate(tags):
-        if tag.lower() == 'time-to-make':
-            if i + 1 < len(tags):
-                time_tag = tags[i + 1]
-                match = re.search(r'(\d+)', time_tag)
-                if match:
-                    return int(match.group(1))  # Use the lower bound as the estimate
-    return None
+# Combine text fields into a single full_text description.
+recipes['full_text'] = recipes['ingredients_text'] + " " + recipes['ingredients_raw_text'] + " " + recipes['steps_text']
 
-recipes['time_to_make'] = recipes['tags'].apply(extract_time_from_tags)
-
-#SOPH IS PROBABLY TO CHANGE THIS 
-# Extract cuisine type from tags.
-def extract_cuisine(tags):
-    for tag in tags:
-        if tag.lower().startswith('cuisine'):
-            parts = tag.split('-')
-            if len(parts) > 1:
-                return parts[1].lower()  # e.g., "italian"
-    return None
-
-recipes['cuisine'] = recipes['tags'].apply(extract_cuisine)
-
-# Ensure 'servings' is numeric. (If not present, you may need to add or impute this column.)
+# Drop rows with empty full_text or missing servings.
+recipes = recipes[recipes['full_text'].str.strip() != ""]
 recipes['servings'] = pd.to_numeric(recipes['servings'], errors='coerce')
-
-# Drop rows missing essential information.
-recipes = recipes.dropna(subset=['time_to_make', 'servings', 'cuisine'])
+recipes = recipes.dropna(subset=['servings'])
 print("Preprocessed recipes shape:", recipes.shape)
 
-
-# -----------------------------
-# Step 2: Create Training Data
-# -----------------------------
-
-# Features:
-#   - Servings (numeric)
-#   - Time-to-make (numeric)
-#   - Cuisine (categorical, one-hot encoded)
-
-X_servings = recipes['servings'].values.reshape(-1, 1)
-X_time = recipes['time_to_make'].values.reshape(-1, 1)
-
-# Scale numeric features.
-scaler_servings = StandardScaler()
-scaler_time = StandardScaler()
-X_servings_scaled = scaler_servings.fit_transform(X_servings)
-X_time_scaled = scaler_time.fit_transform(X_time)
-
-# Encode cuisine.
-le_cuisine = LabelEncoder()
-cuisine_labels = le_cuisine.fit_transform(recipes['cuisine'])
-num_cuisines = len(le_cuisine.classes_)
-X_cuisine = to_categorical(cuisine_labels, num_classes=num_cuisines)
-
-# The target is the recipe. We treat each recipe as a separate class.
+# Encode the target (recipe id) as a class.
 le_recipe = LabelEncoder()
 recipe_ids_encoded = le_recipe.fit_transform(recipes['id'])
 num_recipes = len(le_recipe.classes_)
 y = to_categorical(recipe_ids_encoded, num_classes=num_recipes)
 
-print("Feature shapes:")
-print("Servings:", X_servings_scaled.shape)
-print("Time:", X_time_scaled.shape)
-print("Cuisine:", X_cuisine.shape)
-print("Target (recipes):", y.shape)
+# Also, scale the servings.
+scaler_servings = StandardScaler()
+X_servings = scaler_servings.fit_transform(recipes['servings'].values.reshape(-1, 1))
 
 # -----------------------------
-# Step 3: Build the TensorFlow Model
+# Step 2: Build Text Vectorization and Multi-Input Model
 # -----------------------------
+max_features = 20000
+sequence_length = 500
 
-# Define inputs.
-input_servings = Input(shape=(1,), name='servings')
-input_time = Input(shape=(1,), name='time')
-input_cuisine = Input(shape=(num_cuisines,), name='cuisine')
+# Create a TextVectorization layer for full_text.
+vectorizer = TextVectorization(
+    max_tokens=max_features,
+    output_mode='int',
+    output_sequence_length=sequence_length
+)
+vectorizer.adapt(recipes['full_text'].values)
 
-# Concatenate all inputs.
-x = Concatenate()([input_servings, input_time, input_cuisine])
-x = Dense(128, activation='relu')(x)
-x = Dense(64, activation='relu')(x)
-# Output layer: one neuron per recipe.
-output = Dense(num_recipes, activation='softmax')(x)
+# Define two inputs:
+# 1. A string input for the full_text.
+input_text = Input(shape=(1,), dtype="string", name="full_text")
+# 2. A numeric input for servings.
+input_servings = Input(shape=(1,), name="servings")
 
-model = Model(inputs=[input_servings, input_time, input_cuisine], outputs=output)
-model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+# Process text input.
+x_text = vectorizer(input_text)
+x_text = Embedding(max_features, 128)(x_text)
+x_text = GlobalAveragePooling1D()(x_text)
+x_text = Dense(64, activation="relu")(x_text)
+
+# Optionally, process servings input through a small dense layer.
+x_servings = Dense(16, activation="relu")(input_servings)
+
+# Concatenate the processed text and servings inputs.
+x = Concatenate()([x_text, x_servings])
+x = Dense(64, activation="relu")(x)
+output = Dense(num_recipes, activation="softmax")(x)
+
+model = Model(inputs=[input_text, input_servings], outputs=output)
+model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
 model.summary()
 
 # -----------------------------
-# Step 4: Train the Model
+# Step 3: Train the Model
 # -----------------------------
-
+X_text = recipes['full_text'].values  # Text input.
+# X_servings already computed.
 history = model.fit(
-    [X_servings_scaled, X_time_scaled, X_cuisine],
+    [X_text, X_servings],
     y,
     epochs=10,
     batch_size=32,
     validation_split=0.1
 )
 
-# Save the model and preprocessing objects.
+# Save the trained model and preprocessing objects.
 model.save("recipe_model.h5")
-with open("scaler_servings.pkl", "wb") as f:
-    pickle.dump(scaler_servings, f)
-with open("scaler_time.pkl", "wb") as f:
-    pickle.dump(scaler_time, f)
-with open("le_cuisine.pkl", "wb") as f:
-    pickle.dump(le_cuisine, f)
 with open("le_recipe.pkl", "wb") as f:
     pickle.dump(le_recipe, f)
+with open("scaler_servings.pkl", "wb") as f:
+    pickle.dump(scaler_servings, f)
+# Save the vectorizer as a SavedModel.
+tf.saved_model.save(vectorizer, "text_vectorizer")
 
 print("Model and preprocessing objects saved.")

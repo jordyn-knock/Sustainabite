@@ -3,7 +3,7 @@ import streamlit as st
 def get_user_preferences():
     st.markdown("### Customize Your Recipe Preferences")
 
-    # Servings (stored but not used yet in filtering)
+    # Servings (stoh i ored but not used yet in filtering)
     servings = st.number_input("How many servings do you need?", min_value=1, max_value=20, value=2)
 
     # Max time

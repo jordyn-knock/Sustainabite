@@ -172,6 +172,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+recipes_ingredients.csv
 
 # Virtual Environment
 food_recognition_env/

@@ -1,5 +1,6 @@
 #this is for the favourites tab
 import streamlit as st
+from storage import save_favourites
 
 def render_favourites_tab():
     st.header("My Favourite Recipes")
@@ -12,8 +13,9 @@ def render_favourites_tab():
                 st.write(f"**Time:** {recipe['time']} | **Cuisine:** {recipe['cuisine']}")
                 for j, step in enumerate(recipe["steps"], 1):
                     st.write(f"{j}. {step}")
-                if st.button(f"🗑️ Remove", key=f"remove_{i}"):
+                if st.button(f"Remove", key=f"remove_{i}"):
                     st.session_state.favourites.pop(i)
+                    save_favourites(st.session_state.favourites)
                     st.experimental_rerun()
     else:
         st.write("You haven't saved any recipes yet.")

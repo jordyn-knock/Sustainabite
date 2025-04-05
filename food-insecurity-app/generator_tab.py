@@ -1,5 +1,6 @@
 #this is where the image upload is
 import streamlit as st
+from storage import save_favourites
 from PIL import Image
 
 def render_generator_tab():
@@ -46,7 +47,9 @@ def render_generator_tab():
             for i, step in enumerate(recipe["steps"], 1):
                 st.write(f"{i}. {step}")
 
-            if st.button("❤️ Save to Favourites"):
+            if st.button("Save to Favourites"):
                 if "favourites" not in st.session_state:
                     st.session_state.favourites = []
                 st.session_state.favourites.append(recipe)
+                save_favourites(st.session_state.favourites)
+                st.success("Recipe saved to favourites!")

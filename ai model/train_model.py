@@ -17,12 +17,26 @@ print(df.head())
 #Rename the needed columns
 recipes = df[['id', 'name', 'tags', 'ingredients', 'ingredients_raw', 'steps', 'servings']]
 
-#convert stings to lists 
-recipes['tags'] = recipes['tags'].apply(ast.literal_eval)
-recipes['ingredients'] = recipes['ingredients'].apply(ast.literal_eval)
-recipes['ingredients_raw'] = recipes['ingredients_raw'].apply(ast.literal_eval)
-recipes['steps'] = recipes['steps'].apply(ast.literal_eval)
+for col in ['tags', 'ingredients', 'ingredients_raw', 'steps']:
+    recipes[col] = recipes[col].fillna("[]")
 
+# Define a safe literal_eval function
+def safe_literal_eval(val):
+    try:
+        return ast.literal_eval(val)
+    except Exception as e:
+        print(f"Warning: literal_eval failed on value: {val}\nError: {e}")
+        return []
+
+# Fill missing values in columns that should be stringified lists
+for col in ['tags', 'ingredients', 'ingredients_raw', 'steps']:
+    recipes[col] = recipes[col].fillna("[]")
+
+# Convert stringified lists to actual lists safely
+recipes['tags'] = recipes['tags'].apply(safe_literal_eval)
+recipes['ingredients'] = recipes['ingredients'].apply(safe_literal_eval)
+recipes['ingredients_raw'] = recipes['ingredients_raw'].apply(safe_literal_eval)
+recipes['steps'] = recipes['steps'].apply(safe_literal_eval)
 
 # Extract the time-to-make from the tags.
 def extract_time_from_tags(tags):

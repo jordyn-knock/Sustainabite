@@ -6,7 +6,7 @@ __pycache__/
 # C extensions
 *.so
 
-recipes_ingredients.csv
+ai model/recipes_ingredients.csv
 
 # Distribution / packaging
 .Python

@@ -1,9 +1,12 @@
 #this is where the image upload is
 import streamlit as st
 from storage import save_favourites
+from userinputs import get_user_preferences
+from training.training import find_recipes
 from PIL import Image
 
 def render_generator_tab():
+    prefs = get_user_preferences()
     st.header("📸 Upload Ingredients")
 
     uploaded_files = st.file_uploader(
@@ -32,24 +35,34 @@ def render_generator_tab():
         st.markdown("### Final Ingredients Being Used:")
         st.write(", ".join(set(combined_ingredients)))
 
-        if st.button("Generate Recipe"):
-            # this is where you add the ai logic thingy
-            recipe = {
-                "name": "Tomato Garlic Soup",
-                "steps": ["Chop garlic and onions", "Cook with tomatoes", "Simmer and serve"],
-                "time": "30 minutes",
-                "cuisine": "Italian"
-            }
+    if st.button("Generate Recipe"):
+        results = find_recipes(final_ingredients, prefs)
 
-            st.subheader(recipe["name"])
-            st.write(f"**Time:** {recipe['time']} | **Cuisine:** {recipe['cuisine']}")
-            st.write("### Steps")
-            for i, step in enumerate(recipe["steps"], 1):
-                st.write(f"{i}. {step}")
+        if results.empty:
+            st.warning("No matching recipes found.")
+        else:
+            for idx, row in results.iterrows():
+                st.subheader(row['name'])
+                st.write(f"**Time:** {row['time-to-make']} mins")
+                st.write("### Ingredients")
+                st.write(", ".join(row['ingredients']))
+                st.write("### Steps")
+                for i, step in enumerate(row['steps'], 1):
+                    st.write(f"{i}. {step}")
 
-            if st.button("Save to Favourites"):
-                if "favourites" not in st.session_state:
-                    st.session_state.favourites = []
-                st.session_state.favourites.append(recipe)
-                save_favourites(st.session_state.favourites)
-                st.success("Recipe saved to favourites!")
+                if st.button("Save to Favourites", key=f"save_{idx}"):
+                    if "favourites" not in st.session_state:
+                        st.session_state.favourites = []
+
+                    recipe = {
+                        "name": row['name'],
+                        "ingredients": row['ingredients'],
+                        "steps": row['steps'],
+                        "time": row['time-to-make'],
+                        "cuisine": prefs['cuisine']  # or row['tags'][0] if you prefer
+                    }
+
+                    st.session_state.favourites.append(recipe)
+                    save_favourites(st.session_state.favourites)
+                    st.success(f"{recipe['name']} saved to favourites!")
+

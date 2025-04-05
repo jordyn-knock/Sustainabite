@@ -172,3 +172,5 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+recipes_ingredients.csv
+recipes_ingredients.csv

@@ -24,13 +24,13 @@ def render_pantry_tab():
                 colA.write(f"- {item}")
                 if colB.button("🗑️", key=f"remove_pantry_{i}"):
                     st.session_state.pantry.pop(i)
-                    st.experimental_rerun()
+                    st.rerun()
         else:
             st.write("No pantry items yet.")
 
         if st.button("Clear Pantry"):
             st.session_state.pantry.clear()
-            st.experimental_rerun()
+            st.rerun()
 
     with col2:
         st.subheader("My Grocery List")
@@ -46,13 +46,13 @@ def render_pantry_tab():
                 colA.write(f"- {item}")
                 if colB.button("🗑️", key=f"remove_grocery_{i}"):
                     st.session_state.grocery.pop(i)
-                    st.experimental_rerun()
+                    st.rerun()
         else:
             st.write("No grocery items yet.")
 
         if st.button("Clear Grocery List"):
             st.session_state.grocery.clear()
-            st.experimental_rerun() #this is what forces the app to update, so do not remove it
+            st.rerun() #this is what forces the app to update, so do not remove it
 
     st.markdown("---")
 

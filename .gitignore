@@ -6,7 +6,10 @@ __pycache__/
 # C extensions
 *.so
 
+#jordyn ignores
 ai model/recipes_ingredients.csv
+venv/
+
 
 # Distribution / packaging
 .Python

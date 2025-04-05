@@ -3,9 +3,6 @@ import streamlit as st
 def get_user_preferences():
     st.markdown("### Customize Your Recipe Preferences")
 
-    # Servings (stoh i ored but not used yet in filtering)
-    servings = st.number_input("How many servings do you need?", min_value=1, max_value=20, value=2)
-
     # Max time
     max_time = st.slider("Maximum cooking time (minutes)", min_value=5, max_value=120, value=30)
 
@@ -28,12 +25,14 @@ def get_user_preferences():
     )
 
     use_grocery = st.checkbox("I'm willing to go to the grocery store to get missing ingredients.")
+    allow_substitutions = st.checkbox("I'm okay with ingredient substitutions if needed.")
+
 
     return {
-        "servings": servings,
         "max_time": max_time,
         "cuisine": cuisine,
         "meal_type": meal_type,
-        "use_grocery": use_grocery
+        "use_grocery": use_grocery,
+        "allow_substitutions": allow_substitutions
     }
 

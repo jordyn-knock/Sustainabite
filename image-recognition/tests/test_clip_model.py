@@ -1,10 +1,17 @@
 import os
 import argparse
 import sys
+import pandas as pd
 from PIL import Image
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-sys.path.append('/home/alissah/youCode/youcode/image-recognition')
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+PARENT_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
+
+sys.path.append(PARENT_DIR)
+
 from clip_model import FoodRecognizer
 
 
@@ -24,6 +31,7 @@ def display_results(image_path, ingredients, save_output=True, output_path="outp
     plt.imshow(img)
     plt.axis('off')
     
+    # Show the detected ingredients in a text box
     ingredients_text = "\n".join([f"• {ing}" for ing in ingredients])
     props = dict(boxstyle='round', facecolor='white', alpha=0.7)
     plt.text(img.width * 0.05, img.height * 0.05, 
@@ -31,48 +39,50 @@ def display_results(image_path, ingredients, save_output=True, output_path="outp
              fontsize=12, verticalalignment='top', bbox=props)
     
     plt.title("Food Recognition Results", fontsize=15)
-    
     plt.tight_layout()
 
-    plt.savefig(output_path, bbox_inches='tight')
-    print(f"Output saved to {output_path}")
+    if save_output:
+        plt.savefig(output_path, bbox_inches='tight')
+        print(f"Output saved to {output_path}")
+    else:
+        print("Not saving output image.")
     
-    # plt.show()  # Comment out or remove this line
+    plt.close()
+
 
 def main():
     parser = argparse.ArgumentParser(description='Test CLIP Food Recognition')
-    parser.add_argument('--image', type=str, required=True, help='Path to the food image')
-    parser.add_argument('--threshold', type=float, default=0.2, help='Confidence threshold')
-    parser.add_argument('--top_k', type=int, default=10, help='Maximum number of ingredients to return')
-    parser.add_argument('--save_output', action='store_true', help='Save visualization')
-    parser.add_argument('--output_path', type=str, default='output.jpg', help='Path to save visualization')
-    
+    parser.add_argument('--image', type=str, required=True,
+                        help='Path to the food image (relative or absolute)')
+    parser.add_argument('--save_output', action='store_true',
+                        help='Whether to save the output visualization')
+    parser.add_argument('--output_path', type=str, default='output_visualization.jpg',
+                        help='Path to save the visualization image')
     args = parser.parse_args()
+
+    top_ingredients_csv = os.path.join(PARENT_DIR, "data", "top_500_ingredients.csv")
+
+    df = pd.read_csv(top_ingredients_csv)  
+    top_ingredients = df["ingredient"].tolist()
     
-    # Initialize the recognizer
-    print("Initializing CLIP model...")
-    recognizer = FoodRecognizer()
+    recognizer = FoodRecognizer()  
+    print("Default ingredient count:", len(recognizer.ingredients))
     
-    # Recognize ingredients
-    print(f"Processing image: {args.image}")
-    ingredients = recognizer.recognize_from_file(
-        args.image, 
-        threshold=args.threshold, 
-        top_k=args.top_k
-    )
+    recognizer.ingredients = top_ingredients
+    print("New ingredient count:", len(recognizer.ingredients))
     
-    # Print results
-    print("\nDetected Ingredients:")
-    for i, ingredient in enumerate(ingredients):
-        print(f"{i+1}. {ingredient}")
-    
-    # Display results
+    detected = recognizer.recognize_from_file(args.image)
+    print("\nDetected ingredients:")
+    for ing in detected:
+        print(f"- {ing}")
+
     display_results(
-        args.image, 
-        ingredients, 
-        save_output=args.save_output, 
+        image_path=args.image,
+        ingredients=detected,
+        save_output=args.save_output,
         output_path=args.output_path
     )
+
 
 if __name__ == "__main__":
     main()

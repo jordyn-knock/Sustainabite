@@ -194,8 +194,7 @@ __pycache__/
 models/saved_models/
 
 # Data files (decide if you want to share these or not)
-data/raw/
-data/processed/
+data
 
 # Local configuration
 .env

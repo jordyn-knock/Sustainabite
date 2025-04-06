@@ -1,5 +1,5 @@
 {
-  "max_time": 15,
+  "max_time": "15",
   "cuisine": "Any cuisine",
   "meal_type": "Snack",
   "use_grocery": true,

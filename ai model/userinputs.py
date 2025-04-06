@@ -13,7 +13,7 @@ def get_user_preferences():
 
     saved = st.session_state.get("user_preferences", {})
 
-    time_options = [15,30,60,90]
+    time_options = ["30","60","90","Any"]
     max_time = st.selectbox("Maximum cooking time (minutes)", time_options, index=time_options.index(saved.get("max_time", "30")))
 
     cuisine_options = sorted([
@@ -24,16 +24,12 @@ def get_user_preferences():
 
     cuisine = st.selectbox("Preferred cuisine", cuisine_options, index=cuisine_options.index(saved.get("cuisine", "Any cuisine")))
 
-    meal_options = ["Breakfast", "Full Meal", "Sweet Treat", "Snack"]
-    meal_type = st.radio("Type of meal", meal_options, index=meal_options.index(saved.get("meal_type", "Full Meal")))
-
     use_grocery = st.checkbox("I'm willing to go to the grocery store to get missing ingredients.", value=saved.get("use_grocery", False))
     allow_substitutions = st.checkbox("I'm okay with ingredient substitutions if needed.", value=saved.get("allow_substitutions", False))
 
     preferences = {
         "max_time": max_time,
         "cuisine": cuisine,
-        "meal_type": meal_type,
         "use_grocery": use_grocery,
         "allow_substitutions": allow_substitutions
     }

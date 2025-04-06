@@ -6,7 +6,6 @@ import pickle
 from typing import List, Dict, Tuple, Any
 import os
 
-
 from userinputs import get_user_preferences
 
 # Substitutions dictionary
@@ -18,29 +17,84 @@ SUBSTITUTIONS = {
     "flour": ["almond flour", "coconut flour", "whole wheat flour"],
     "salt": ["sea salt", "kosher salt"],
     "baking powder": ["baking soda"],
-    "cheddar": ["colby jack", "monterey jack"],
+    "cheese": ["colby jack", "monterey jack", "cheddar", "mozzerella"],
     "cream": ["coconut cream", "cashew cream", "sour cream"],
     "vanilla extract": ["vanilla bean", "vanilla paste"],
     "oil": ["canola oil", "vegetable oil"],
 }
 
-def ingredient_match_score(user_ingredients: List[str], recipe_ingredients: List[str], substitutions_allowed: bool) -> float:
+SAMPLE_INGREDIENTS = ["yeast", "flour"]
+DEFAULT_INGREDIENTS = {"salt", "water", "oil", "pepper", "warm water", "salt and pepper", "salt pepper"}
+
+def ingredient_match_score(user_ingredients: List[str],
+                           recipe_ingredients: List[str],
+                           substitutions_allowed: bool,
+                           user_willing_to_buy_more: bool,
+                           beta: float = 0.2) -> float:
     """
-    Compute a match score between the user's ingredients and a recipe's ingredients.
-    - Direct matches count as 1.
-    - Substitute matches (if allowed) count as 0.5.
-    Returns a normalized score between 0 and 1.
+    Compute a match score between the user's ingredients and the recipe's ingredients.
+    
+    The user's ingredient list is considered explicit. Additionally, we assume that 
+    DEFAULT_INGREDIENTS (e.g., salt, water, oil, etc.) are always available.
+    
+    When the user is NOT willing to buy extra groceries (user_willing_to_buy_more is False):
+      - The recipe is only acceptable if every non-default ingredient in the recipe is already in 
+        the user's explicit ingredients (ignoring DEFAULT_INGREDIENTS).
+      - If this condition is met, the function returns 1.0 (a perfect match).
+      - Otherwise, it returns 0.
+    
+    When the user IS willing to buy extra ingredients:
+      - A flexible (partial match) score is computed:
+          - Each direct match (ingredient found in the augmented set of user's ingredients) contributes 1.
+          - Each valid substitution (if allowed) contributes 0.5.
+          - The base score is the sum divided by the total number of recipe ingredients.
+          - A bonus factor is applied (using beta) based on the fraction of the user's explicit 
+            ingredients used by the recipe.
+    
+    The final score is capped at 1.
     """
-    user_set = set([i.lower().strip() for i in user_ingredients])
-    score = 0
+    # Normalize user ingredients.
+    user_explicit = set(i.lower().strip() for i in user_ingredients)
+    # Augmented user set: assume defaults are available.
+    augmented_user_set = user_explicit | DEFAULT_INGREDIENTS
+
+    # For strict matching, consider only non-default ingredients in the recipe.
+    recipe_non_default = {r.lower().strip() for r in recipe_ingredients if r.lower().strip() not in DEFAULT_INGREDIENTS}
+
+    # If the user is NOT willing to buy more, then the recipe must use only ingredients the user already has.
+    if not user_willing_to_buy_more:
+        if not recipe_non_default.issubset(user_explicit):
+            return 0.0
+        else:
+            return 1.0  # Perfect match if all non-default ingredients are already in user's pantry.
+    
+    # Otherwise, if the user is willing to buy more, compute a flexible match score.
+    total = len(recipe_ingredients)
+    if total == 0:
+        return 1.0
+
+    matched = 0.0
     for ingr in recipe_ingredients:
         ingr_norm = ingr.lower().strip()
-        if ingr_norm in user_set:
-            score += 1
+        if ingr_norm in augmented_user_set:
+            matched += 1.0
         elif substitutions_allowed and ingr_norm in SUBSTITUTIONS:
-            if any(sub in user_set for sub in SUBSTITUTIONS[ingr_norm]):
-                score += 0.5
-    return score / len(recipe_ingredients) if recipe_ingredients else 0
+            if any(sub.lower().strip() in augmented_user_set for sub in SUBSTITUTIONS[ingr_norm]):
+                matched += 0.5
+
+    base_score = matched / total
+
+    # Bonus: fraction of user's explicit ingredients that appear in the recipe.
+    if user_explicit:
+        used_explicit = sum(1 for ingr in recipe_ingredients if ingr.lower().strip() in user_explicit)
+        bonus = used_explicit / len(user_explicit)
+    else:
+        bonus = 0.0
+    bonus_factor = 1 + beta * bonus
+
+    final_score = base_score * bonus_factor
+    return min(final_score, 1.0)
+
 
 def load_model_files():
     """Load all required model files"""
@@ -127,6 +181,10 @@ def get_recommendations():
         # Get user preferences
         prefs = get_user_preferences()
         print(f"User preferences: {prefs}")
+
+        # Since there is no ingredients part in user preferences, we use our sample list for testing.
+        prefs["ingredients"] = SAMPLE_INGREDIENTS
+        print("Using sample ingredients:", prefs["ingredients"])
         
         # Extract key preferences
         selected_cuisine = prefs["cuisine"].lower()
@@ -198,23 +256,39 @@ def get_recommendations():
         # ------------------------------
         # Step 2: Calculate ingredient match scores
         # ------------------------------
+        # ------------------------------
+# Step 2: Calculate ingredient match scores
+# ------------------------------
+        # ------------------------------
+# Step 2: Calculate ingredient match scores
+# ------------------------------
         scores = []
         for _, recipe in matching_recipes.iterrows():
-            ingredients = recipe['ingredients']
-            if not isinstance(ingredients, list):
-                continue
-                
-            score = ingredient_match_score(user_ingredients, ingredients, allow_substitutions)
-            scores.append(score)
+            # Get the ingredients list from 'ingredients'
+            ingr_list = recipe['ingredients']
             
+            # Attempt to get additional ingredients from 'ingredients_raw'
+            try:
+                raw_ingr = recipe.get('ingredients_raw')
+                if isinstance(raw_ingr, str):
+                    raw_ingr = eval(raw_ingr)
+                if isinstance(raw_ingr, list):
+                    # Combine both lists and remove duplicates
+                    ingr_list = list(set(ingr_list) | set(raw_ingr))
+            except Exception as e:
+                print(f"Error processing ingredients_raw for recipe {recipe['id']}: {e}")
+            
+            score = ingredient_match_score(user_ingredients, ingr_list, allow_substitutions, use_grocery, beta=0.2)
+            scores.append(score)
+        # Assign the scores list to the column after the loop completes
         matching_recipes['ingredient_score'] = scores
-        
-        # If user won't buy more ingredients, filter to high-score recipes
+
+        # If user is NOT willing to buy extra groceries, then filter out recipes that don't match exactly.
         if not use_grocery:
-            filtered = matching_recipes[matching_recipes['ingredient_score'] >= 0.8]
-            if len(filtered) > 0:
-                matching_recipes = filtered
-                print(f"Filtered to {len(matching_recipes)} recipes with ingredient score >= 0.8")
+            matching_recipes = matching_recipes[matching_recipes['ingredient_score'] > 0]
+            if matching_recipes.empty:
+                print("No recipes found that use only your ingredients.")
+                return None, None
         
         # ------------------------------
         # Step 3: Rank using trained model
@@ -253,7 +327,7 @@ def get_recommendations():
                     matching_recipes.loc[matching_recipes['id'] == recipe_id, 'model_score'] = predictions[i, idx[0]]
         
         # Calculate final score as weighted combination of ingredient score and model score
-        matching_recipes['final_score'] = (matching_recipes['ingredient_score'] * 0.7) + (matching_recipes['model_score'] * 0.3)
+        matching_recipes['final_score'] = (matching_recipes['ingredient_score'] * 0.95) + (matching_recipes['model_score'] * 0.05)
         
         # Sort by final score
         ranked_recipes = matching_recipes.sort_values(by='final_score', ascending=False)

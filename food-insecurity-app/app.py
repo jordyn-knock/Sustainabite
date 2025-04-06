@@ -5,7 +5,7 @@ from favourites_tab import render_favourites_tab
 from storage import load_favourites
 from PIL import Image
 
-st.set_page_config(page_title="I'm Hungry", layout="centered")
+st.set_page_config(page_title="Sustainabite", layout="centered")
 
 st.title("I'm Hungry")
 st.write("Upload an image of your ingredients and get a recipe!")
@@ -15,7 +15,7 @@ if "favourites" not in st.session_state:
     st.session_state.favourites = load_favourites()
 
 # Define your tabs
-tab1, tab2, tab3 = st.tabs(["Upload Image", "Pantry & My List", "Favourites"])
+tab1, tab2, tab3 = st.tabs(["Find Recipe", "Pantry Cupboard", "Favourites"])
 
 with tab1:
     render_generator_tab()

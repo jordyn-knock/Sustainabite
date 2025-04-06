@@ -3,3 +3,5 @@ transformers
 pillow
 matplotlib
 numpy
+pandas
+requests

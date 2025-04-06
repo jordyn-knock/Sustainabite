@@ -24,38 +24,31 @@ from get_recommendation import get_recommendations
 try:
     from clip_model import FoodRecognizer
     print("Successfully imported FoodRecognizer")
-    # Check if we can create a FoodRecognizer instance with ingredients_csv
-    try:
-        ingredients_csv = os.path.join(image_recognition_path, "data", "top_500_ingredients.csv")
-        print(f"Looking for ingredients CSV at: {ingredients_csv}")
-        
-        if os.path.exists(ingredients_csv):
-            print(f"Ingredients CSV found at: {ingredients_csv}")
-            try:
-                # Try with ingredients_csv parameter
-                recognizer = FoodRecognizer(ingredients_csv=ingredients_csv)
-            except TypeError:
-                # Fall back to no parameters if that fails
-                print("FoodRecognizer doesn't accept ingredients_csv parameter, using default init")
-                recognizer = FoodRecognizer()
-        else:
-            print(f"Ingredients CSV not found at: {ingredients_csv}")
-            recognizer = FoodRecognizer()  # Fall back to default path
-    except Exception as e:
-        print(f"Error initializing FoodRecognizer: {e}")
-        recognizer = FoodRecognizer()  # Fall back to default initialization
 except ImportError as e:
     print(f"Error importing FoodRecognizer: {e}")
     print(f"Current sys.path: {sys.path}")
-    # Create a mock recognizer
+    # Fallback to a mock recognizer if import fails
     class FoodRecognizer:
         def __init__(self):
             print("Using mock FoodRecognizer")
         
         def recognize(self, image):
             return [("tomato", 0.9), ("onion", 0.8), ("garlic", 0.7)]
+
+# Initialize FoodRecognizer once
+try:
+    ingredients_csv = os.path.join(image_recognition_path, "data", "top_500_ingredients.csv")
+    print(f"Looking for ingredients CSV at: {ingredients_csv}")
     
-    recognizer = FoodRecognizer()
+    if os.path.exists(ingredients_csv):
+        print(f"Ingredients CSV found at: {ingredients_csv}")
+        recognizer = FoodRecognizer(ingredients_csv=ingredients_csv)
+    else:
+        print(f"Ingredients CSV not found at: {ingredients_csv}")
+        recognizer = FoodRecognizer()  # Fall back to default path
+except Exception as e:
+    print(f"Error initializing FoodRecognizer: {e}")
+    recognizer = FoodRecognizer()  # Fall back to default initialization
 
 def render_generator_tab():
     prefs = get_user_preferences()
@@ -139,44 +132,25 @@ def render_generator_tab():
     if st.session_state.current_ingredients:
         st.subheader("Here's what I see:")
         
-        # Create a container for the detected ingredients with a light gray background
-        with st.container():
-            st.markdown("""
-            <style>
-            .ingredient-box {
-                background-color: #f0f2f6;
-                border-radius: 5px;
-                padding: 10px;
-                margin-bottom: 10px;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-            
-            st.markdown('<div class="ingredient-box">', unsafe_allow_html=True)
-            
-            # Use small columns to make buttons more compact
-            num_cols = 5  # More columns for a more compact layout
-            cols = st.columns(num_cols)
-            
-            ingredients_to_remove = []
-            
-            # Arrange ingredients in columns
-            for i, ingredient in enumerate(st.session_state.current_ingredients):
-                with cols[i % num_cols]:
-                    # Create smaller buttons with just an X and the ingredient name
-                    if st.button(f"❌ {ingredient}", key=f"del_{i}", 
-                                use_container_width=True):
-                        ingredients_to_remove.append(ingredient)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Remove ingredients that were deleted
-            if ingredients_to_remove:
-                st.session_state.current_ingredients = [
-                    ing for ing in st.session_state.current_ingredients 
-                    if ing not in ingredients_to_remove
-                ]
-                st.rerun()
+        # Simple display of ingredients without custom CSS
+        ingredients_to_remove = []
+        
+        # Create a clean layout with multiple columns - without custom styling
+        cols = st.columns(4)  # Use 4 columns for a compact layout
+        
+        for i, ingredient in enumerate(st.session_state.current_ingredients):
+            with cols[i % 4]:
+                # Create a compact button with smaller text
+                if st.button(f"❌ {ingredient}", key=f"del_{i}", use_container_width=True):
+                    ingredients_to_remove.append(ingredient)
+        
+        # Remove ingredients that were deleted
+        if ingredients_to_remove:
+            st.session_state.current_ingredients = [
+                ing for ing in st.session_state.current_ingredients 
+                if ing not in ingredients_to_remove
+            ]
+            st.rerun()
     
         # Add new ingredients manually
         new_ingredient = st.text_input("Want to add or remove anything? (comma-separated)")
@@ -230,6 +204,8 @@ def render_generator_tab():
     if combined_ingredients:
         st.markdown("### Final Ingredients Being Used:")
         st.write(", ".join(combined_ingredients))
+
+        print(combined_ingredients)
     
     # Generate recipe button
     if st.button("Generate Recipe"):
@@ -280,7 +256,8 @@ def render_generator_tab():
                 save_favourites(st.session_state.favourites)
                 st.success("Recipe saved to favourites!")
 
-            if other_recs is not None and not other_recs.empty:
+            if other_recs is not None and len(other_recs) > 0:
                 st.markdown("### Other Recommended Recipes")
                 for _, recipe in other_recs.iterrows():
-                    st.markdown(f"- **{recipe['name']}** (Score: {recipe['ingredient_score']:.2f})")
+                    score = recipe.get('ingredient_score', 0)
+                    st.markdown(f"- **{recipe['name']}** (Score: {score:.2f})")

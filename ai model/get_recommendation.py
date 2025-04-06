@@ -251,7 +251,7 @@ def get_recommendations():
         time_preds = []
         for i in range(0, len(recipe_db), batch_size):
             batch = recipe_db['name'].iloc[i:i+batch_size].tolist()
-            batch_preds = time_clf.predict(batch)
+            batch_preds = time_tag_classifier.joblib.predict(batch)
             time_preds.extend(batch_preds)
         recipe_db['predicted_time'] = time_preds
 
@@ -287,55 +287,43 @@ def get_recommendations():
 # Step 2: Calculate ingredient match scores
 # ------------------------------
         scores = []
+        match_text = []
         for _, recipe in matching_recipes.iterrows():
-            # Get the ingredients list from 'ingredients'
             ingr_list = recipe['ingredients']
-            
-            # Attempt to get additional ingredients from 'ingredients_raw'
             try:
                 raw_ingr = recipe.get('ingredients_raw')
                 if isinstance(raw_ingr, str):
                     raw_ingr = eval(raw_ingr)
                 if isinstance(raw_ingr, list):
-                    # Combine both lists and remove duplicates
                     ingr_list = list(set(ingr_list) | set(raw_ingr))
             except Exception as e:
                 print(f"Error processing ingredients_raw for recipe {recipe['id']}: {e}")
-            
-            score = ingredient_match_score(user_ingredients, ingr_list, allow_substitutions, use_grocery, beta=0.2)
-            scores.append(score)
-        # Assign the scores list to the column after the loop completes
-        matching_recipes['ingredient_score'] = scores
 
-        # If user is NOT willing to buy extra groceries, then filter out recipes that don't match exactly.
-        if not use_grocery:
-            matching_recipes = matching_recipes[matching_recipes['ingredient_score'] > 0]
-            if matching_recipes.empty:
-                print("No recipes found that use only your ingredients.")
-                return None, None
-        
+            score = ingredient_match_score(user_ingredients, ingr_list, allow_substitutions, use_grocery, beta)
+            scores.append(score)
+
+            percent = int(round(score * 100))
+            match_text.append(f"{percent}% match")
+
+        matching_recipes['ingredient_score'] = scores
+        matching_recipes['match_text'] = match_text
+
         # ------------------------------
         # Step 3: Rank using trained model
         # ------------------------------
         # For recipes that passed filtering, get model predictions
         X_text = matching_recipes['full_text'].values
-        X_servings = np.array([[requested_servings]] * len(matching_recipes)).astype(np.float32)
         
         # Get model predictions
         print("Getting model predictions...")
         # Ensure X_text_tensor and X_servings_tensor are defined as tensors
-# For example, if X_text and X_servings are numpy arrays:
         X_text_tensor = tf.constant(X_text.reshape(-1, 1), dtype=tf.string)
-        X_servings_tensor = tf.constant(X_servings.reshape(-1, 1), dtype=tf.float32)
 
         inputs = {
             "full_text": X_text_tensor,
-            "servings": X_servings_tensor
         }
 # Call the serving function; adjust "output_0" if your model uses a different output key.
         predictions = infer(**inputs)["output_0"].numpy()
-
-
 
         # Get recipe IDs from model
         recipe_ids = le_recipe.classes_

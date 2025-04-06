@@ -25,12 +25,12 @@ def get_user_preferences():
         value=defaults.get("max_time", 30)
     )
 
-    cuisine_options = [
-        "italian", "mexican", "chinese", "indian", "thai", "french",
-        "greek", "japanese", "american", "spanish", "moroccan",
-        "vietnamese", "korean", "caribbean", "irish", "german",
-        "Any cuisine"
-    ]
+    cuisine_options = sorted([
+    "italian", "mexican", "chinese", "indian", "thai", "french",
+    "greek", "japanese", "american", "spanish", "moroccan",
+    "vietnamese", "korean", "caribbean", "irish", "german"
+    ]) + ["Any cuisine"]
+    
     cuisine = st.selectbox("Preferred cuisine", options=cuisine_options, index=cuisine_options.index(defaults.get("cuisine", "Not applicable")))
 
     meal_type = st.radio(

@@ -67,3 +67,6 @@ def get_user_preferences():
             json.dump(preferences, f)
 
     return preferences
+
+if __name__ == "__main__":
+    print(get_user_preferences())

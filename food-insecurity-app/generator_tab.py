@@ -13,6 +13,8 @@ from get_recommendation import get_recommendations
 
 def render_generator_tab():
     prefs = get_user_preferences()
+    st.write("🛠️ Debug: User Preferences")
+    st.json(prefs)  
     st.header("Upload Ingredients")
 
     # Defaults
@@ -89,6 +91,6 @@ def render_generator_tab():
                 st.success("Recipe saved to favourites!")
 
             if other_recs is not None and not other_recs.empty:
-                st.markdown("###Other Recommended Recipes")
+                st.markdown("### Other Recommended Recipes")
                 for _, recipe in other_recs.iterrows():
                     st.markdown(f"- **{recipe['name']}** (Score: {recipe['ingredient_score']:.2f})")

@@ -1,21 +1,29 @@
 import pandas as pd
-import ast
-import re
-import pickle
 import numpy as np
-import json
-from typing import List
-import joblib
 import tensorflow as tf
-from tensorflow.keras.models import load_model
-from tqdm import tqdm
+import joblib
+import pickle
+from typing import List, Dict, Tuple, Any
+import os
 
-# Import user preferences from your UI module.
-from userinputs import get_user_preferences
+# from userinputs import get_user_preferences
 
-# -----------------------------
-# Substitutions dictionary with many examples
-# -----------------------------
+def get_user_preferences():
+    """Returns user preferences from UI or mock data for testing"""
+    return {
+        "max_time": 60,  # minutes
+        "cuisine": "Italian",  # Italian, Mexican, Asian, etc.
+        "meal_type": "Full Meal",  # maps to "meals"
+        "servings": 4,
+        "use_grocery": True,  # willing to buy ingredients
+        "allow_substitutions": True,  # allow ingredient substitutions
+        "ingredients": [
+            "pasta", "tomato sauce", "cheese", "garlic", "olive oil",
+            "basil", "salt", "pepper", "onion"
+        ]
+    }
+
+# Substitutions dictionary
 SUBSTITUTIONS = {
     "milk": ["almond milk", "soy milk", "oat milk", "coconut milk"],
     "butter": ["margarine", "coconut oil", "olive oil"],
@@ -28,7 +36,6 @@ SUBSTITUTIONS = {
     "cream": ["coconut cream", "cashew cream", "sour cream"],
     "vanilla extract": ["vanilla bean", "vanilla paste"],
     "oil": ["canola oil", "vegetable oil"],
-    # Add more substitutions as needed.
 }
 
 def ingredient_match_score(user_ingredients: List[str], recipe_ingredients: List[str], substitutions_allowed: bool) -> float:
@@ -49,162 +56,238 @@ def ingredient_match_score(user_ingredients: List[str], recipe_ingredients: List
                 score += 0.5
     return score / len(recipe_ingredients) if recipe_ingredients else 0
 
-# -----------------------------
-# Helper function to load saved recommendation model and preprocessing objects.
-# -----------------------------
-def load_preprocessing_objects():
-    model = load_model("recipe_model.h5")
-    with open("le_recipe.pkl", "rb") as f:
+def load_model_files():
+    """Load all required model files"""
+    # Try different possible paths for files
+    models_dir = "."
+    ai_models_dir = "ai model"
+    
+    # Load main recommendation model
+    model_path = find_file(["recipe_model.h5"], [models_dir, ai_models_dir])
+    if not model_path:
+        raise FileNotFoundError("Recipe model file not found")
+    
+    model = tf.keras.models.load_model(model_path)
+    print(f"Loaded recommendation model from {model_path}")
+    
+    # Load label encoder
+    le_path = find_file(["le_recipe.pkl"], [models_dir, ai_models_dir])
+    if not le_path:
+        raise FileNotFoundError("Label encoder file not found")
+    
+    with open(le_path, "rb") as f:
         le_recipe = pickle.load(f)
-    vectorizer = tf.saved_model.load("text_vectorizer")
-    try:
-        @tf.function(input_signature=[tf.TensorSpec([None], tf.string)])
-        def call_vectorizer(x):
-            return vectorizer(x)
-        # Call the wrapped function with a dummy input to warm up the lookup table.
-        dummy_out = call_vectorizer(tf.constant(["dummy"]))
-        print("Vectorizer warmed up successfully with tf.function wrapper.")
-    except Exception as e:
-        print("Failed to warm up vectorizer:", e)
-    return model, le_recipe, vectorizer
+    print(f"Loaded label encoder with {len(le_recipe.classes_)} classes")
+    
+    # Load text vectorizer
+    vectorizer_path = find_file(["text_vectorizer"], [models_dir, ai_models_dir])
+    if not vectorizer_path:
+        raise FileNotFoundError("Text vectorizer not found")
+    
+    vectorizer = tf.saved_model.load(vectorizer_path)
+    print(f"Loaded text vectorizer")
+    
+    # Load cuisine classifier
+    cuisine_path = find_file(["cuisine_clf.joblib"], [models_dir, ai_models_dir])
+    if not cuisine_path:
+        raise FileNotFoundError("Cuisine classifier not found")
+    
+    cuisine_clf = joblib.load(cuisine_path)
+    print(f"Loaded cuisine classifier")
+    
+    # Load meal type classifier
+    meal_path = find_file(["recipe_category_clf.joblib"], [models_dir, ai_models_dir])
+    if not meal_path:
+        raise FileNotFoundError("Meal type classifier not found")
+    
+    meal_clf = joblib.load(meal_path)
+    print(f"Loaded meal type classifier")
+    
+    # Load recipe database from pickle instead of CSV
+    recipe_db_path = find_file(["recipe_database.pkl"], [models_dir, ai_models_dir])
+    if recipe_db_path:
+        # Use the pickled recipe database if available
+        with open(recipe_db_path, "rb") as f:
+            recipe_db = pickle.load(f)
+        print(f"Loaded recipe database from pickle with {len(recipe_db)} recipes")
+    else:
+        # Fall back to CSV if pickle not found (for backward compatibility)
+        recipe_path = find_file(["recipes_ingredients.csv"], [models_dir, ai_models_dir])
+        if not recipe_path:
+            raise FileNotFoundError("Recipe database not found")
+        
+        recipe_db = pd.read_csv(recipe_path)
+        print(f"Loaded recipe database from CSV with {len(recipe_db)} recipes")
+    
+    return model, le_recipe, vectorizer, cuisine_clf, meal_clf, recipe_db
 
+def find_file(filenames, directories):
+    """Helper function to find a file in multiple possible directories"""
+    for directory in directories:
+        for filename in filenames:
+            path = os.path.join(directory, filename)
+            if os.path.exists(path):
+                return path
+    return None
 
-
-# -----------------------------
-# Helper to safely evaluate stringified lists.
-# -----------------------------
-def safe_eval(obj) -> List[str]:
-    if obj is None or (isinstance(obj, float) and pd.isna(obj)):
-        return []
-    if isinstance(obj, list):
-        return obj
-    text = str(obj)
-    try:
-        return ast.literal_eval(text)
-    except (ValueError, SyntaxError):
-        pass
-    try:
-        json_text = text.replace("'", '"')
-        return json.loads(json_text)
-    except json.JSONDecodeError:
-        return []
-
-# -----------------------------
-# Main function: Generate Recommendations
-# -----------------------------
 def get_recommendations():
-    # Get user preferences from the UI.
-    prefs = get_user_preferences()
-    # Expected keys: max_time, cuisine, meal_type, servings, use_grocery, allow_substitutions, and (optionally) ingredients.
-    selected_cuisine = prefs["cuisine"].lower()
-    USER_TO_CATEGORY = {
-        "Breakfast": "breakfast",
-        "Full Meal": "meals",
-        "Sweet Treat": "sweet treat",
-        "Snack": "snacks"
-    }
-    selected_meal_type = USER_TO_CATEGORY.get(prefs["meal_type"], "unknown")
-    max_time = prefs["max_time"]
-    # For ingredient matching, expect a list of ingredients.
-    user_ingredients = prefs.get("ingredients", [])
-    allow_substitutions = prefs.get("allow_substitutions", False)
-    use_grocery = prefs.get("use_grocery", False)
-    
-    # For testing, if no ingredients are provided, use an example list.
-    if not user_ingredients:
-        user_ingredients = [
-            "flour", "milk", "egg", "sugar", "butter",
-            "vanilla extract", "baking powder", "salt", "oil"
+    """Generate recipe recommendations based on user preferences"""
+    try:
+        # Load all model files
+        model, le_recipe, vectorizer, cuisine_clf, meal_clf, recipe_db = load_model_files()
+        
+        # Get user preferences
+        prefs = get_user_preferences()
+        print(f"User preferences: {prefs}")
+        
+        # Extract key preferences
+        selected_cuisine = prefs["cuisine"].lower()
+        USER_TO_CATEGORY = {
+            "Breakfast": "breakfast",
+            "Full Meal": "meals", 
+            "Sweet Treat": "sweet treat",
+            "Snack": "snacks"
+        }
+        selected_meal_type = USER_TO_CATEGORY.get(prefs["meal_type"], "unknown")
+        requested_servings = float(prefs.get("servings", 4))
+        user_ingredients = prefs.get("ingredients", [])
+        allow_substitutions = prefs.get("allow_substitutions", False)
+        use_grocery = prefs.get("use_grocery", False)
+        
+        print(f"Looking for {selected_cuisine} {selected_meal_type} recipes for {requested_servings} servings")
+        
+        # ------------------------------
+        # Step 1: Pre-filter recipes by cuisine and meal type 
+        # ------------------------------
+        
+        # Ensure ingredients column is processed
+        recipe_db['ingredients'] = recipe_db['ingredients'].apply(lambda x: 
+            eval(x) if isinstance(x, str) else x if isinstance(x, list) else [])
+        
+        # Create the text features needed for the classifiers
+        recipe_db['ingredients_raw_text'] = recipe_db['ingredients_raw'].apply(lambda x: 
+            " ".join(eval(x)) if isinstance(x, str) else " ".join(x) if isinstance(x, list) else "")
+        
+        recipe_db['ingredients_text'] = recipe_db['ingredients'].apply(lambda x: 
+            " ".join(x) if isinstance(x, list) else "")
+            
+        recipe_db['steps_text'] = recipe_db['steps'].apply(lambda x: 
+            " ".join(eval(x)) if isinstance(x, str) else " ".join(x) if isinstance(x, list) else "")
+            
+        recipe_db['full_text'] = recipe_db['ingredients_text'] + " " + recipe_db['ingredients_raw_text'] + " " + recipe_db['steps_text']
+        
+        # Predict cuisine for all recipes
+        print("Predicting cuisine for recipes...")
+        batch_size = 500
+        cuisines = []
+        for i in range(0, len(recipe_db), batch_size):
+            batch = recipe_db['ingredients_raw_text'].iloc[i:i+batch_size].tolist()
+            predictions = cuisine_clf.predict(batch)
+            cuisines.extend(predictions)
+        recipe_db['predicted_cuisine'] = cuisines
+        
+        # Predict meal type for all recipes
+        print("Predicting meal type for recipes...")
+        meal_types = []
+        for i in range(0, len(recipe_db), batch_size):
+            batch = recipe_db['full_text'].iloc[i:i+batch_size].tolist()
+            predictions = meal_clf.predict(batch)
+            meal_types.extend(predictions)
+        recipe_db['predicted_meal_type'] = meal_types
+        
+        # Filter by cuisine and meal type
+        matching_recipes = recipe_db[
+            (recipe_db['predicted_cuisine'].str.lower() == selected_cuisine) & 
+            (recipe_db['predicted_meal_type'].str.lower() == selected_meal_type)
         ]
-        print("Using example user ingredient list.")
-    
-    # Load raw recipes.
-    df = pd.read_csv('ai model/recipes_ingredients.csv')
-    print("Total recipes loaded:", df.shape)
-    
-    # Preprocess raw data.
-    for col in ['ingredients', 'ingredients_raw', 'steps']:
-        df[col] = df[col].fillna("[]")
-    df['ingredients'] = df['ingredients'].apply(safe_eval)
-    df['ingredients_raw'] = df['ingredients_raw'].apply(safe_eval)
-    df['steps'] = df['steps'].apply(safe_eval)
-    
-    def join_text(lst):
-        return " ".join(lst)
-    
-    df['ingredients_text'] = df['ingredients'].apply(join_text)
-    df['ingredients_raw_text'] = df['ingredients_raw'].apply(join_text)
-    df['steps_text'] = df['steps'].apply(join_text)
-    df['full_text'] = df['ingredients_text'] + " " + df['ingredients_raw_text'] + " " + df['steps_text']
-    df['servings'] = pd.to_numeric(df['servings'], errors='coerce')
-    df = df.dropna(subset=['servings'])
-    print("Preprocessed recipes shape:", df.shape)
-    
-    # -----------------------------
-    # Annotate recipes with pre-trained classifiers using batch predictions.
-    # -----------------------------
-    batch_size = 1000
-    # Load Cuisine Bot.
-    cuisine_clf = joblib.load("cuisine_clf.joblib")
-    cuisine_texts = df["ingredients_raw_text"].tolist()
-    predicted_cuisines = []
-    for i in tqdm(range(0, len(cuisine_texts), batch_size), desc="Predicting Cuisine"):
-        batch = cuisine_texts[i:i+batch_size]
-        batch_preds = cuisine_clf.predict(batch)
-        predicted_cuisines.extend(batch_preds)
-    df["predicted_cuisine"] = predicted_cuisines
-    
-    # Load Meal Bot.
-    category_clf = joblib.load("recipe_category_clf.joblib")
-    full_texts = df["full_text"].tolist()
-    predicted_meal_types = []
-    for i in tqdm(range(0, len(full_texts), batch_size), desc="Predicting Meal Type"):
-        batch = full_texts[i:i+batch_size]
-        batch_preds = category_clf.predict(batch)
-        predicted_meal_types.extend(batch_preds)
-    df["predicted_meal_type"] = predicted_meal_types
-    
-    # Filter recipes by selected cuisine and meal type.
-    candidates = df[
-        (df["predicted_cuisine"].str.lower() == selected_cuisine) &
-        (df["predicted_meal_type"].str.lower() == selected_meal_type)
-    ]
-    print(f"Candidate recipes after filtering: {candidates.shape}")
-    
-    # (Optional) Filter further by max_time using a Time Bot here.
-    
-    # Load recommendation model and preprocessing objects.
-    model, le_recipe, vectorizer = load_preprocessing_objects()
-    
-    # Generate model predictions for candidate recipes (optional for ranking).
-    X_text = candidates["full_text"].values
-    X_servings = candidates["servings"].values.reshape(-1, 1).astype(np.float32)
-    preds = model.predict([X_text, X_servings])
-    
-    # Compute ingredient match score for each candidate.
-    scores = []
-    for idx, row in candidates.iterrows():
-        recipe_ingredients = row["ingredients"]
-        score = ingredient_match_score(user_ingredients, recipe_ingredients, substitutions_allowed=allow_substitutions)
-        scores.append(score)
-    candidates["ingredient_score"] = scores
-    
-    # If the user isn't willing to buy extra ingredients, filter by a threshold.
-    if not use_grocery:
-        candidates = candidates[candidates["ingredient_score"] >= 0.8]
-    
-    # Rank candidates by ingredient score (descending).
-    ranked_candidates = candidates.sort_values(by="ingredient_score", ascending=False)
-    
-    # Select the top recipe and 10 additional recommendations.
-    top_recipe = ranked_candidates.iloc[0]
-    other_recipes = ranked_candidates.iloc[1:11]
-    
-    return top_recipe, other_recipes
+        
+        print(f"Found {len(matching_recipes)} recipes matching {selected_cuisine} {selected_meal_type}")
+        
+        if len(matching_recipes) == 0:
+            print("No matching recipes found")
+            return None, None
+        
+        # ------------------------------
+        # Step 2: Calculate ingredient match scores
+        # ------------------------------
+        scores = []
+        for _, recipe in matching_recipes.iterrows():
+            ingredients = recipe['ingredients']
+            if not isinstance(ingredients, list):
+                continue
+                
+            score = ingredient_match_score(user_ingredients, ingredients, allow_substitutions)
+            scores.append(score)
+            
+        matching_recipes['ingredient_score'] = scores
+        
+        # If user won't buy more ingredients, filter to high-score recipes
+        if not use_grocery:
+            filtered = matching_recipes[matching_recipes['ingredient_score'] >= 0.8]
+            if len(filtered) > 0:
+                matching_recipes = filtered
+                print(f"Filtered to {len(matching_recipes)} recipes with ingredient score >= 0.8")
+        
+        # ------------------------------
+        # Step 3: Rank using trained model
+        # ------------------------------
+        # For recipes that passed filtering, get model predictions
+        X_text = matching_recipes['full_text'].values
+        X_servings = np.array([[requested_servings]] * len(matching_recipes)).astype(np.float32)
+        
+        # Get model predictions
+        print("Getting model predictions...")
+        predictions = model.predict([X_text, X_servings], verbose=0)
+        
+        # Get recipe IDs from model
+        recipe_ids = le_recipe.classes_
+        
+        # Add prediction scores
+        matching_recipes['model_score'] = 0
+        
+        # Match prediction scores to recipes
+        for i, recipe_id in enumerate(matching_recipes['id']):
+            if recipe_id in recipe_ids:
+                idx = np.where(recipe_ids == recipe_id)[0]
+                if len(idx) > 0:
+                    matching_recipes.loc[matching_recipes['id'] == recipe_id, 'model_score'] = predictions[i, idx[0]]
+        
+        # Calculate final score as weighted combination of ingredient score and model score
+        matching_recipes['final_score'] = (matching_recipes['ingredient_score'] * 0.7) + (matching_recipes['model_score'] * 0.3)
+        
+        # Sort by final score
+        ranked_recipes = matching_recipes.sort_values(by='final_score', ascending=False)
+        
+        # Return top recipe and next 10 recommendations
+        if len(ranked_recipes) > 0:
+            top_recipe = ranked_recipes.iloc[0]
+            print(f"Top recipe: {top_recipe['name']} (Score: {top_recipe['final_score']:.2f})")
+            
+            other_recipes = ranked_recipes.iloc[1:11] if len(ranked_recipes) > 1 else pd.DataFrame()
+            return top_recipe, other_recipes
+        else:
+            print("No suitable recipes found")
+            return None, None
+            
+    except Exception as e:
+        print(f"Error generating recommendations: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, None
 
+# Entry point for testing
 if __name__ == "__main__":
-    best_recipe, recommendations = get_recommendations()
-    print("Best Recipe:")
-    print(best_recipe)
-    print("\nOther Recommendations:")
-    print(recommendations)
+    print("Testing recipe recommendation system")
+    top_recipe, other_recipes = get_recommendations()
+    
+    if top_recipe is not None:
+        print("\n--- TOP RECOMMENDATION ---")
+        print(f"Recipe: {top_recipe['name']}")
+        print(f"Ingredients: {top_recipe['ingredients']}")
+        print(f"Ingredient match score: {top_recipe['ingredient_score']:.2f}")
+        print(f"Steps: {top_recipe['steps']}")
+        
+        if len(other_recipes) > 0:
+            print("\n--- OTHER RECOMMENDATIONS ---")
+            for _, recipe in other_recipes.iterrows():
+                print(f"- {recipe['name']} (Score: {recipe['ingredient_score']:.2f})")

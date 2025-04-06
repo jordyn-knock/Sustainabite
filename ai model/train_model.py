@@ -183,6 +183,14 @@ history = model.fit(
     validation_split=0.1
 )
 
+
+# Extract essential recipe data to save alongside model
+recipes_essential = recipes[['id', 'name', 'ingredients', 'ingredients_raw', 'steps', 'servings']]
+
+# Save this alongside your other model files
+with open("recipe_database.pkl", "wb") as f:
+    pickle.dump(recipes_essential, f)
+
 # Save the model and preprocessing objects.
 model.save("recipe_model.h5")
 with open("le_recipe.pkl", "wb") as f:

@@ -6,7 +6,7 @@ import pandas as pd
 import os
 from pathlib import Path
 
-THRESHOLD = 0.02  # Default threshold value
+THRESHOLD = 0.05  # Default threshold value
 TOP_K = 7  # Default top_k value
 
 class FoodRecognizer:

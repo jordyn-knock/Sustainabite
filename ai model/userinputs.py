@@ -2,6 +2,8 @@ import streamlit as st
 import json
 import os
 
+USER_PREFS_FILE = os.path.join(os.path.dirname(__file__), 'user_preferences.json')
+
 def get_user_preferences():
     # Load existing preferences
     if os.path.exists(USER_PREFS_FILE) and "user_preferences" not in st.session_state:
@@ -10,7 +12,7 @@ def get_user_preferences():
 
     saved = st.session_state.get("user_preferences", {})
 
-    time_options = ["30","60","90","Any"]
+    time_options = ["15", "30", "60", "Any"]
     max_time = st.selectbox("Maximum cooking time (minutes)", time_options, index=time_options.index(saved.get("max_time", "30")))
 
     cuisine_options = sorted([
@@ -24,6 +26,7 @@ def get_user_preferences():
     use_grocery = st.checkbox("I'm willing to go to the grocery store to get missing ingredients.", value=saved.get("use_grocery", False))
     allow_substitutions = st.checkbox("I'm okay with ingredient substitutions if needed.", value=saved.get("allow_substitutions", False))
 
+    # Correct the preferences dictionary creation
     preferences = {
         "max_time": max_time,
         "cuisine": cuisine,
@@ -31,14 +34,10 @@ def get_user_preferences():
         "allow_substitutions": allow_substitutions
     }
     
-    # If there are saved preferences in session state, use those
-    if "user_prefs" in st.session_state:
-        prefs.update(st.session_state["user_prefs"])
-    
     # Save preferences to session state
-    st.session_state["user_prefs"] = prefs
+    st.session_state["user_prefs"] = preferences
     
-    return prefs
+    return preferences
 
 def load_user_profile():
     """Load user profile from JSON file."""

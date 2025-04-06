@@ -1,4 +1,5 @@
 import streamlit as st
+from image_api import get_recipe_image
 from storage import save_favourites
 from PIL import Image
 import sys
@@ -61,6 +62,9 @@ def render_generator_tab():
             st.warning("No matching recipes found.")
         else:
             st.subheader(f"⭐ Top Recipe: {top_recipe['name']}")
+            img_url = get_recipe_image(top_recipe["name"])
+            if img_url:
+                st.image(img_url, caption=top_recipe["name"], use_column_width=True)
             st.write(f"**Ingredient Match Score:** {top_recipe['ingredient_score']:.2f}")
             st.write("### Ingredients")
             st.write(", ".join(top_recipe["ingredients"]))

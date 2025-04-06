@@ -30,8 +30,8 @@ def get_user_preferences():
     "greek", "japanese", "american", "spanish", "moroccan",
     "vietnamese", "korean", "caribbean", "irish", "german"
     ]) + ["Any cuisine"]
-    
-    cuisine = st.selectbox("Preferred cuisine", options=cuisine_options, index=cuisine_options.index(defaults.get("cuisine", "Not applicable")))
+
+    cuisine = st.selectbox("Preferred cuisine", options=cuisine_options, index=cuisine_options.index(defaults.get("cuisine", "Any cuisine")))
 
     meal_type = st.radio(
         "Type of meal",

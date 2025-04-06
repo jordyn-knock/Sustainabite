@@ -69,4 +69,10 @@ def get_user_preferences():
     return preferences
 
 if __name__ == "__main__":
-    print(get_user_preferences())
+    prefs = get_user_preferences()
+    print("user preferences: ")
+    print(f"max time: {prefs['max_time']} mins")
+    print(f"cuisine type: {prefs['cuisine']}")
+    print(f"type of meal: {prefs['meal_type']}")
+    print(f"willing to buy groceries: {prefs['use_grocery']}")
+    print(f"They allow substitutions: {prefs['allow_substitutions']}")

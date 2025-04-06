@@ -19,14 +19,14 @@ from userinputs import get_user_preferences
 prefs = get_user_preferences()  # returns a dict with keys: max_time, cuisine, meal_type, servings, use_grocery, allow_substitutions
 
 # Map the UI meal type (user-friendly) to our category keys.
-USER_TO_CATEGORY = {
-    "Breakfast": "breakfast",
-    "Full Meal": "meals",
-    "Sweet Treat": "sweet treat",
-    "Snack": "snacks"
-}
+# USER_TO_CATEGORY = {
+#     "Breakfast": "breakfast",
+#     "Full Meal": "meals",
+#     "Sweet Treat": "sweet treat",
+#     "Snack": "snacks"
+# }
 selected_cuisine = prefs["cuisine"].lower()
-selected_meal_type = USER_TO_CATEGORY.get(prefs["meal_type"], "unknown")
+# selected_meal_type = USER_TO_CATEGORY.get(prefs["meal_type"], "unknown")
 max_time = prefs["max_time"]  # Not used in this example, but can be used for further filtering.
 
 # -----------------------------
@@ -103,25 +103,56 @@ for i in tqdm(range(0, len(cuisine_texts), batch_size), desc="Predicting Cuisine
     predicted_cuisines.extend(batch_preds)
 recipes["predicted_cuisine"] = predicted_cuisines
 
+# Load the pre-trained Time Classifier (based on title)
+time_clf = joblib.load("time_tag_classifier.joblib")
+time_texts = recipes['name'].astype(str).tolist()
+time_preds = []
+for i in tqdm(range(0, len(time_texts), batch_size), desc="Predicting Time"):
+    batch = time_texts[i:i+batch_size]
+    batch_preds = time_clf.predict(batch)
+    time_preds.extend(batch_preds)
+recipes['predicted_time'] = time_preds
+
+
 # Load the pre-trained Recipe Category (Meal) Bot.
-category_clf = joblib.load("recipe_category_clf.joblib")
+# category_clf = joblib.load("recipe_category_clf.joblib")
 
-# --- Meal Type Predictions with Progress Bar ---
-full_texts = recipes["full_text"].tolist()
-predicted_meal_types = []
-for i in tqdm(range(0, len(full_texts), batch_size), desc="Predicting Meal Type"):
-    batch = full_texts[i:i+batch_size]
-    batch_preds = category_clf.predict(batch)
-    predicted_meal_types.extend(batch_preds)
-recipes["predicted_meal_type"] = predicted_meal_types
+# # --- Meal Type Predictions with Progress Bar ---
+# full_texts = recipes["full_text"].tolist()
+# predicted_meal_types = []
+# for i in tqdm(range(0, len(full_texts), batch_size), desc="Predicting Meal Type"):
+#     batch = full_texts[i:i+batch_size]
+#     batch_preds = category_clf.predict(batch)
+#     predicted_meal_types.extend(batch_preds)
+# recipes["predicted_meal_type"] = predicted_meal_types
 
-# Filter recipes by user-selected cuisine and meal type.
-recipes = recipes[
-    (recipes["predicted_cuisine"].str.lower() == selected_cuisine) &
-    (recipes["predicted_meal_type"].str.lower() == selected_meal_type)
-]
-print(f"Dataset shape after filtering for cuisine '{selected_cuisine}' and meal type '{selected_meal_type}':", recipes.shape)
 
+
+# # Filter recipes by user-selected cuisine and meal type.
+# recipes = recipes[
+#     (recipes["predicted_cuisine"].str.lower() == selected_cuisine) &
+#     (recipes["predicted_meal_type"].str.lower() == selected_meal_type)
+# ]
+# print(f"Dataset shape after filtering for cuisine '{selected_cuisine}' and meal type '{selected_meal_type}':", recipes.shape)
+
+if selected_cuisine != "any cuisine":
+    recipes = recipes[recipes["predicted_cuisine"].str.lower() == selected_cuisine]
+
+# if selected_meal_type != "unknown":
+    # recipes = recipes[recipes["predicted_meal_type"].str.lower() == selected_meal_type]
+
+if max_time <= 15:
+    time_label = "under_15"
+elif max_time <= 30:
+    time_label = "under_30"
+elif max_time <= 60:
+    time_label = "under_60"
+else:
+    time_label = "any"
+
+recipes = recipes[recipes['predicted_time'] == time_label]
+
+print(f"Dataset shape after filtering for cuisine '{selected_cuisine}', and time '{time_label}':", recipes.shape)
 
 # -----------------------------
 # Step 2: Create Training Data
@@ -187,14 +218,11 @@ history = model.fit(
 # Extract essential recipe data to save alongside model
 recipes_essential = recipes[['id', 'name', 'ingredients', 'ingredients_raw', 'steps', 'servings']]
 
-
 with open("recipe_database.pkl", "wb") as f:
     pickle.dump(recipes_essential, f)
 
-
 with open("le_recipe.pkl", "wb") as f:
     pickle.dump(le_recipe, f)
-
 
 model.export("recipe_model_tf")
 

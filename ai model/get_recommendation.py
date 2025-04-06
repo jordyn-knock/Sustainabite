@@ -13,7 +13,7 @@ SUBSTITUTIONS = {
     "milk": ["almond milk", "soy milk", "oat milk", "coconut milk"],
     "butter": ["margarine", "coconut oil", "olive oil"],
     "sugar": ["honey", "maple syrup", "agave nectar", "brown sugar"],
-    "egg": ["egg substitute, flax egg"],
+    "egg": ["egg substitute", "flax egg"],
     "flour": ["almond flour", "coconut flour", "whole wheat flour"],
     "salt": ["sea salt", "kosher salt"],
     "baking powder": ["baking soda"],

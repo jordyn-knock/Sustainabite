@@ -1,6 +1,7 @@
-import os
+##import os
 import pandas as pd
 import ast
+import os
 
 # Get the full path to the CSV file in the same folder
 base_dir = os.path.dirname(__file__)
@@ -95,3 +96,4 @@ def find_recipes(ingredients_input, preferences, use_substitutes=False, top_n=5)
         matches.append(row)
 
     return pd.DataFrame(matches).head(top_n)[['name', 'ingredients', 'estimated_time', 'steps']]
+##

@@ -1,15 +1,21 @@
-#this is where the image upload is
 import streamlit as st
+from image_api import get_recipe_image
 from storage import save_favourites
-from userinputs import get_user_preferences
-from training.training import find_recipes
 from PIL import Image
+import sys
+import os
+
+# Add "ai model" directory to the path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "ai model")))
+
+from userinputs import get_user_preferences
+from get_recommendation import get_recommendations
 
 def render_generator_tab():
     prefs = get_user_preferences()
     st.header("📸 Upload Ingredients")
 
-    # Default fallback values
+    # Defaults
     combined_ingredients = []
     use_substitutes = False
 
@@ -20,7 +26,7 @@ def render_generator_tab():
     )
 
     if uploaded_files:
-        # Placeholder for model extraction
+        # Placeholder: replace with actual image-to-ingredients model
         detected_ingredients = ["garlic", "tomato"]
 
         st.subheader("Here's what I see:")
@@ -41,38 +47,48 @@ def render_generator_tab():
         st.markdown("### Final Ingredients Being Used:")
         st.write(", ".join(set(combined_ingredients)))
 
-    # Always show the button
     if st.button("Generate Recipe"):
         if not combined_ingredients:
             st.warning("Please upload an image and confirm your ingredients before generating.")
             return
 
-        results = find_recipes(combined_ingredients, prefs, use_substitutes=use_substitutes)
+        # Update preferences with ingredients and substitute toggle
+        prefs["ingredients"] = combined_ingredients
+        prefs["allow_substitutions"] = use_substitutes
 
-        if results.empty:
+        top_recipe, other_recs = get_recommendations()
+
+        if not top_recipe:
             st.warning("No matching recipes found.")
         else:
-            for idx, row in results.iterrows():
-                st.subheader(row['name'])
-                st.write(f"**Time:** {row['estimated_time']} mins")
-                st.write("### Ingredients")
-                st.write(", ".join(row['ingredients']))
-                st.write("### Steps")
-                for i, step in enumerate(row['steps'], 1):
-                    st.write(f"{i}. {step}")
+            st.subheader(f"⭐ Top Recipe: {top_recipe['name']}")
+            img_url = get_recipe_image(top_recipe["name"])
+            if img_url:
+                st.image(img_url, caption=top_recipe["name"], use_column_width=True)
+            st.write(f"**Ingredient Match Score:** {top_recipe['ingredient_score']:.2f}")
+            st.write("### Ingredients")
+            st.write(", ".join(top_recipe["ingredients"]))
+            st.write("### Steps")
+            for i, step in enumerate(top_recipe["steps"], 1):
+                st.write(f"{i}. {step}")
 
-                if st.button("Save to Favourites", key=f"save_{idx}"):
-                    if "favourites" not in st.session_state:
-                        st.session_state.favourites = []
+            if st.button("Save to Favourites"):
+                if "favourites" not in st.session_state:
+                    st.session_state.favourites = []
 
-                    recipe = {
-                        "name": row['name'],
-                        "ingredients": row['ingredients'],
-                        "steps": row['steps'],
-                        "time": row['estimated_time'],
-                        "cuisine": prefs['cuisine']
-                    }
+                recipe = {
+                    "name": top_recipe["name"],
+                    "ingredients": top_recipe["ingredients"],
+                    "steps": top_recipe["steps"],
+                    "time": "Unknown",  # Update if time is added
+                    "cuisine": prefs["cuisine"]
+                }
 
-                    st.session_state.favourites.append(recipe)
-                    save_favourites(st.session_state.favourites)
-                    st.success(f"{recipe['name']} saved to favourites!")
+                st.session_state.favourites.append(recipe)
+                save_favourites(st.session_state.favourites)
+                st.success("Recipe saved to favourites!")
+
+            if other_recs is not None and not other_recs.empty:
+                st.markdown("### 🔍 Other Recommended Recipes")
+                for _, recipe in other_recs.iterrows():
+                    st.markdown(f"- **{recipe['name']}** (Score: {recipe['ingredient_score']:.2f})")

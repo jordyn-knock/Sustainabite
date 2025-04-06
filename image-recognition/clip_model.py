@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd 
 import ast
 
-THRESHOLD = 0.02  # Default threshold value
+THRESHOLD = 0.01  # Default threshold value
 TOP_K = 20  # Default top_k value
 
 class FoodRecognizer:

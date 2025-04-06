@@ -182,8 +182,6 @@ def render_generator_tab():
     else:
         st.info("Upload an image to detect ingredients or add them manually.")
     
-    # Option for substitutions
-    use_substitutes = st.checkbox("I'm willing to accept substitutes")
     
     # Combine with pantry and grocery items
     combined_ingredients = st.session_state.current_ingredients.copy()

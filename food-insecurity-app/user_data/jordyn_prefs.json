@@ -1,1 +1,1 @@
-{"max_time": 30, "cuisine": "Any cuisine", "meal_type": "Breakfast", "use_grocery": false, "allow_substitutions": false}
+{"max_time": "30", "cuisine": "Any cuisine", "meal_type": "Breakfast", "use_grocery": false, "allow_substitutions": false}

@@ -9,7 +9,7 @@ from PIL import Image
 st.set_page_config(page_title="I'm Hungry", layout="centered")
 
 if "logged_in" not in st.session_state or not st.session_state.logged_in:
-    st.title("🍽️ Welcome to I'm Hungry")
+    st.title("Welcome to I'm Hungry")
     st.subheader("Please log in to continue")
     login_form()
     st.stop()  

@@ -22,7 +22,7 @@ def render_pantry_tab():
             for i, item in enumerate(st.session_state.pantry):
                 colA, colB = st.columns([4, 1])
                 colA.write(f"- {item}")
-                if colB.button("🗑️", key=f"remove_pantry_{i}"):
+                if colB.button("Remove", key=f"remove_pantry_{i}"):
                     st.session_state.pantry.pop(i)
                     st.rerun()
         else:
@@ -44,7 +44,7 @@ def render_pantry_tab():
             for i, item in enumerate(st.session_state.grocery):
                 colA, colB = st.columns([4, 1])
                 colA.write(f"- {item}")
-                if colB.button("🗑️", key=f"remove_grocery_{i}"):
+                if colB.button("Remove", key=f"remove_grocery_{i}"):
                     st.session_state.grocery.pop(i)
                     st.rerun()
         else:

@@ -29,7 +29,7 @@ def get_user_preferences():
         "italian", "mexican", "chinese", "indian", "thai", "french",
         "greek", "japanese", "american", "spanish", "moroccan",
         "vietnamese", "korean", "caribbean", "irish", "german",
-        "Not applicable"
+        "Any cuisine"
     ]
     cuisine = st.selectbox("Preferred cuisine", options=cuisine_options, index=cuisine_options.index(defaults.get("cuisine", "Not applicable")))
 

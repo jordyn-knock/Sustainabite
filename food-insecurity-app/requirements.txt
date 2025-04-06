@@ -1,0 +1,9 @@
+streamlit
+pillow
+tensorflow
+scikit-learn
+pandas
+numpy
+joblib
+serpapi
+google-search-results

@@ -68,7 +68,7 @@ def find_recipes(ingredients_input, preferences, use_substitutes=False, top_n=5)
             continue
 
         # Filter by cuisine
-        if cuisine != "Not applicable":
+        if cuisine != "Any cuisine":
             if not any(cuisine.lower() == tag.lower() for tag in row['tags']):
                 continue
 

@@ -3,9 +3,9 @@
 recipe_total_time_predictor_normal.py
 Train a regression model to predict total cooking time (in minutes)
 by combining:
-  a) Extraction of actionable terms from recipe directions (free‑form text),
+  a) Extraction of actionable terms from recipe steps (free‑form text),
   b) Association of default times with these actions,
-  c) Extraction of explicit numerical times stated in the directions,
+  c) Extraction of explicit numerical times stated in the steps,
   d) A non‑conservative estimate: sum of explicit times and default times,
 integrated with numeric prep and cook times.
 """
@@ -25,7 +25,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.metrics import mean_squared_error, r2_score
 
 # ─────────────────────────────────── CONFIG ───────────────────────────────────
-CSV_PATH = Path("recipes.csv")  
+CSV_PATH = Path("recipes.csv")  # New dataset file
 MODEL_PATH = Path("recipe_total_time_predictor_normal.joblib")
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -52,7 +52,7 @@ DEFAULT_DURATIONS = {
 
 TIME_REGEX = re.compile(r"(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)", re.IGNORECASE)
 
-class DirectionsTimeEstimator(BaseEstimator, TransformerMixin):
+class StepsTimeEstimator(BaseEstimator, TransformerMixin):
     def __init__(self, default_durations=DEFAULT_DURATIONS, time_regex=TIME_REGEX):
         self.default_durations = default_durations
         self.time_regex = time_regex
@@ -103,33 +103,42 @@ def parse_time(time_str):
 
 def build_dataframe(csv_path: Path) -> pd.DataFrame:
     print("📥 Loading CSV …")
-    df = pd.read_csv(csv_path, usecols=["directions", "prep_time", "cook_time", "total_time"])
+    df = pd.read_csv(csv_path, usecols=["steps", "prep_time", "cook_time", "total_time"])
     
-    # Convert "directions" to a lower-case string.
-    df["directions"] = df["directions"].astype(str).str.lower()
+    # Convert "steps" to a lower-case string.
+    df["steps"] = df["steps"].astype(str).str.lower()
     
-    # Convert time columns to numeric and fill missing values with 0 for prep_time and cook_time.
+    # Convert prep_time and cook_time to numeric and fill missing values with 0.
     df["prep_time"] = pd.to_numeric(df["prep_time"], errors="coerce").fillna(0)
     df["cook_time"] = pd.to_numeric(df["cook_time"], errors="coerce").fillna(0)
-    df["total_time"] = pd.to_numeric(df["total_time"], errors="coerce")
+    
+    # Convert total_time:
+    # Try converting to float; if that fails, use parse_time on the string.
+    def convert_total_time(x):
+        try:
+            return float(x)
+        except (ValueError, TypeError):
+            return parse_time(str(x))
+    
+    df["total_time"] = df["total_time"].apply(convert_total_time)
     
     print("Before dropping NA:")
     print(df.head())
-    print("Non-null counts:\n", df[['directions', 'prep_time', 'cook_time', 'total_time']].count())
+    print("Non-null counts:\n", df[['steps', 'prep_time', 'cook_time', 'total_time']].count())
     
-    # Drop rows missing directions or total_time.
-    df = df.dropna(subset=["directions", "total_time"]).copy()
+    # Drop rows missing steps or total_time.
+    df = df.dropna(subset=["steps", "total_time"]).copy()
     print(f"🥘 Total recipes for training after dropna: {len(df):,}")
     return df
 
 
 def train_model(df: pd.DataFrame) -> Pipeline:
-    X = df[["directions", "prep_time", "cook_time"]]
+    X = df[["steps", "prep_time", "cook_time"]]
     y = df["total_time"]
 
     preprocessor = ColumnTransformer(
         transformers=[
-            ("directions_estimated_time", DirectionsTimeEstimator(), "directions"),
+            ("steps_estimated_time", StepsTimeEstimator(), "steps"),
             ("numeric", "passthrough", ["prep_time", "cook_time"]),
         ]
     )
@@ -155,10 +164,10 @@ def save_model(model: Pipeline, path: Path) -> None:
     joblib.dump(model, path)
     print(f"\n✅ Model saved to {path}")
 
-def predict_total_time(model, directions: str, prep_time: float, cook_time: float) -> float:
-    directions_text = str(directions).lower()
+def predict_total_time(model, steps: str, prep_time: float, cook_time: float) -> float:
+    steps_text = str(steps).lower()
     input_df = pd.DataFrame({
-        "directions": [directions_text],
+        "steps": [steps_text],
         "prep_time": [prep_time],
         "cook_time": [cook_time],
     })
@@ -173,3 +182,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

@@ -1,0 +1,7 @@
+{
+  "max_time": 47,
+  "cuisine": "Any cuisine",
+  "meal_type": "Snack",
+  "use_grocery": true,
+  "allow_substitutions": true
+}

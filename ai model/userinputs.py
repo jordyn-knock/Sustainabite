@@ -2,21 +2,17 @@ import streamlit as st
 import os
 import json
 
-USER_PREFS_DIR = "user_data"
-os.makedirs(USER_PREFS_DIR, exist_ok=True)
+USER_PREFS_FILE = "user_data/preferences.json"
+os.makedirs("user_data", exist_ok=True)
 
 def get_user_preferences():
-    username = st.session_state.get("username", "default_user")
-    file_path = os.path.join(USER_PREFS_DIR, f"{username}_prefs.json")
-
-    # Load preferences from disk (only once per session)
-    if os.path.exists(file_path) and "user_preferences" not in st.session_state:
-        with open(file_path, "r") as f:
+    # Load existing preferences
+    if os.path.exists(USER_PREFS_FILE) and "user_preferences" not in st.session_state:
+        with open(USER_PREFS_FILE, "r") as f:
             st.session_state["user_preferences"] = json.load(f)
 
     saved = st.session_state.get("user_preferences", {})
 
-    # UI widgets
     max_time = st.slider("Maximum cooking time (minutes)", 5, 120, saved.get("max_time", 30))
 
     cuisine_options = sorted([
@@ -41,9 +37,9 @@ def get_user_preferences():
         "allow_substitutions": allow_substitutions
     }
 
-    # Only save if preferences changed
+    # Save updated preferences
     if preferences != saved:
-        with open(file_path, "w") as f:
+        with open(USER_PREFS_FILE, "w") as f:
             json.dump(preferences, f, indent=2)
         st.session_state["user_preferences"] = preferences
 

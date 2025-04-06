@@ -3,7 +3,7 @@ from pantry_tab import render_pantry_tab
 from generator_tab import render_generator_tab
 from favourites_tab import render_favourites_tab
 from storage import load_favourites
-from auth import login_form  # 🔐 your login function
+from auth import login_form  
 from PIL import Image
 
 st.set_page_config(page_title="I'm Hungry", layout="centered")
@@ -13,7 +13,7 @@ if "logged_in" not in st.session_state or not st.session_state.logged_in:
     st.title("🍽️ Welcome to I'm Hungry")
     st.subheader("Please log in to continue")
     login_form()
-    st.stop()  # 🚫 stop the rest of the app unless logged in
+    st.stop()  
 
 # 🔓 User is logged in
 st.title("I'm Hungry")

@@ -61,7 +61,7 @@ def render_generator_tab():
         if not top_recipe:
             st.warning("No matching recipes found.")
         else:
-            st.subheader(f"⭐ Top Recipe: {top_recipe['name']}")
+            st.subheader(f"Top Recipe: {top_recipe['name']}")
             img_url = get_recipe_image(top_recipe["name"])
             if img_url:
                 st.image(img_url, caption=top_recipe["name"], use_column_width=True)
@@ -89,6 +89,6 @@ def render_generator_tab():
                 st.success("Recipe saved to favourites!")
 
             if other_recs is not None and not other_recs.empty:
-                st.markdown("### 🔍 Other Recommended Recipes")
+                st.markdown("###Other Recommended Recipes")
                 for _, recipe in other_recs.iterrows():
                     st.markdown(f"- **{recipe['name']}** (Score: {recipe['ingredient_score']:.2f})")

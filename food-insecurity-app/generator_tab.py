@@ -13,7 +13,7 @@ from get_recommendation import get_recommendations
 
 def render_generator_tab():
     prefs = get_user_preferences()
-    st.header("📸 Upload Ingredients")
+    st.header("Upload Ingredients")
 
     # Defaults
     combined_ingredients = []

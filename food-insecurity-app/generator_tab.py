@@ -13,9 +13,10 @@ from get_recommendation import get_recommendations
 
 def render_generator_tab():
     prefs = get_user_preferences()
-    st.write("🛠️ Debug: User Preferences")
-    st.json(prefs)  
-    st.header("Upload Ingredients")
+    st.markdown("#### User Preferences")
+    for key, value in prefs.items():
+        st.write(f"{key.replace('_', ' ').title()}: {value}")
+
 
     # Defaults
     combined_ingredients = []

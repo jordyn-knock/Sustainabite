@@ -10,11 +10,12 @@ Main goal -> Provide a tool to reduce overconsumption, promoting usage of what y
 THUS, leading to the Sustainabite! Users are able to snap a quick image of their ingredients, pantry or refridgerator, fill out a few preferences on cuisine and cooking time and yield a few recipes to optimize the ingredients they have at home. 
 
 ## How we built it
-We built a mobile app based on a Kaggle dataset of 500,000 unique recipes.
+We built a website based on a Kaggle dataset of 500,000 unique recipes.
 
 IMAGE DETECTION
 -> Integrating **CLIP by OpenAI**, the model understands images and text in conjunction, enabling identification
 -> Pulls ingredients from a list of 500+ common ingredients
+-> Fine tuned on the common data base
 
 OVERARCHING AI MODEL (code name: botboclaat)
 -> Trained on **retrieving a recipe** based on the following user inputs

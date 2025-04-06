@@ -1,54 +1,37 @@
 import streamlit as st
-import json
 import os
+import json
 
 USER_PREFS_DIR = "user_data"
 os.makedirs(USER_PREFS_DIR, exist_ok=True)
 
 def get_user_preferences():
-    st.markdown("### Customize Your Recipe Preferences")
+    username = st.session_state.get("username", "default_user")
+    file_path = os.path.join(USER_PREFS_DIR, f"{username}_prefs.json")
 
-    # Load existing preferences if available
-    if "username" in st.session_state:
-        file_path = os.path.join(USER_PREFS_DIR, f"{st.session_state['username']}_prefs.json")
-        if os.path.exists(file_path) and "user_preferences" not in st.session_state:
-            with open(file_path, "r") as f:
-                st.session_state["user_preferences"] = json.load(f)
+    # Load preferences from disk (only once per session)
+    if os.path.exists(file_path) and "user_preferences" not in st.session_state:
+        with open(file_path, "r") as f:
+            st.session_state["user_preferences"] = json.load(f)
 
-    # Pre-fill from session state if available
-    defaults = st.session_state.get("user_preferences", {})
+    saved = st.session_state.get("user_preferences", {})
 
-    max_time = st.slider(
-        "Maximum cooking time (minutes)", 
-        min_value=5, 
-        max_value=120, 
-        value=defaults.get("max_time", 30)
-    )
+    # UI widgets
+    max_time = st.slider("Maximum cooking time (minutes)", 5, 120, saved.get("max_time", 30))
 
     cuisine_options = sorted([
-    "italian", "mexican", "chinese", "indian", "thai", "french",
-    "greek", "japanese", "american", "spanish", "moroccan",
-    "vietnamese", "korean", "caribbean", "irish", "german"
+        "american", "caribbean", "chinese", "french", "german", "greek",
+        "indian", "irish", "italian", "japanese", "korean", "mexican",
+        "moroccan", "spanish", "thai", "vietnamese"
     ]) + ["Any cuisine"]
 
-    cuisine = st.selectbox("Preferred cuisine", options=cuisine_options, index=cuisine_options.index(defaults.get("cuisine", "Any cuisine")))
+    cuisine = st.selectbox("Preferred cuisine", cuisine_options, index=cuisine_options.index(saved.get("cuisine", "Any cuisine")))
 
-    meal_type = st.radio(
-        "Type of meal",
-        options=["Breakfast", "Full Meal", "Sweet Treat", "Snack"],
-        horizontal=True,
-        index=["Breakfast", "Full Meal", "Sweet Treat", "Snack"].index(defaults.get("meal_type", "Breakfast"))
-    )
+    meal_options = ["Breakfast", "Full Meal", "Sweet Treat", "Snack"]
+    meal_type = st.radio("Type of meal", meal_options, index=meal_options.index(saved.get("meal_type", "Full Meal")))
 
-    use_grocery = st.checkbox(
-        "I'm willing to go to the grocery store to get missing ingredients.",
-        value=defaults.get("use_grocery", False)
-    )
-
-    allow_substitutions = st.checkbox(
-        "I'm okay with ingredient substitutions if needed.",
-        value=defaults.get("allow_substitutions", False)
-    )
+    use_grocery = st.checkbox("I'm willing to go to the grocery store to get missing ingredients.", value=saved.get("use_grocery", False))
+    allow_substitutions = st.checkbox("I'm okay with ingredient substitutions if needed.", value=saved.get("allow_substitutions", False))
 
     preferences = {
         "max_time": max_time,
@@ -58,21 +41,10 @@ def get_user_preferences():
         "allow_substitutions": allow_substitutions
     }
 
-    # Save in session state
-    st.session_state["user_preferences"] = preferences
-
-    # Also save to file if user is logged in
-    if "username" in st.session_state:
+    # Only save if preferences changed
+    if preferences != saved:
         with open(file_path, "w") as f:
-            json.dump(preferences, f)
+            json.dump(preferences, f, indent=2)
+        st.session_state["user_preferences"] = preferences
 
     return preferences
-
-if __name__ == "__main__":
-    prefs = get_user_preferences()
-    print("user preferences: ")
-    print(f"max time: {prefs['max_time']} mins")
-    print(f"cuisine type: {prefs['cuisine']}")
-    print(f"type of meal: {prefs['meal_type']}")
-    print(f"willing to buy groceries: {prefs['use_grocery']}")
-    print(f"They allow substitutions: {prefs['allow_substitutions']}")

@@ -20,7 +20,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report
 
 # ─────────────────────────────────── CONFIG ───────────────────────────────────
-CSV_PATH = Path("RAW_recipes.csv")              # raw recipes file
+# CSV_PATH = Path("RAW_recipes.csv")
+#  for jordyn
+CSV_PATH = Path("ai model/recipes_ingredients.csv")                # raw recipes file
 MODEL_PATH = Path("recipe_category_clf.joblib")   # where to save the trained model
 
 # Define the categories and associated keywords

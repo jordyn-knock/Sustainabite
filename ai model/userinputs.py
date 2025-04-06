@@ -3,6 +3,8 @@ import json
 import os
 
 def get_user_preferences():
+    USER_PREFS_FILE = "user_data/preferences.json"
+
     # Load existing preferences
     if os.path.exists(USER_PREFS_FILE) and "user_preferences" not in st.session_state:
         with open(USER_PREFS_FILE, "r") as f:
@@ -10,7 +12,7 @@ def get_user_preferences():
 
     saved = st.session_state.get("user_preferences", {})
 
-    time_options = ["30","60","90","Any"]
+    time_options = ["15","30","60","Any"]
     max_time = st.selectbox("Maximum cooking time (minutes)", time_options, index=time_options.index(saved.get("max_time", "30")))
 
     cuisine_options = sorted([

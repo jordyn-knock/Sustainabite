@@ -5,6 +5,7 @@ import joblib
 import pickle
 from typing import List, Dict, Tuple, Any
 import os
+import gzip
 
 from userinputs import get_user_preferences
 
@@ -14,83 +15,78 @@ SUBSTITUTIONS = {
     "butter": ["margarine", "coconut oil", "olive oil"],
     "sugar": ["honey", "maple syrup", "agave nectar", "brown sugar"],
     "egg": ["egg substitute", "flax egg"],
-    "flour": ["almond flour", "coconut flour", "whole wheat flour"],
+    "flour": ["almond flour", "coconut flour", "whole wheat flour", "gluten-free flour"],
     "salt": ["sea salt", "kosher salt"],
     "baking powder": ["baking soda"],
-    "cheese": ["colby jack", "monterey jack", "cheddar", "mozzerella"],
     "cream": ["coconut cream", "cashew cream", "sour cream"],
     "vanilla extract": ["vanilla bean", "vanilla paste"],
+}
+
+ALIASES = {
+    "flour": ["all-purpose flour", "white flour", "whole wheat flour"],
+    "milk": ["whole milk", "2% milk", "skim milk"],
+    "pasta": ["penne", "rigatoni", "spaghetti", "fettuccine", "farfalle", "macaroni"],
+    "onion": ["red onion", "white onion", "yellow onion"],
+    "garlic": ["garlic cloves", "minced garlic"],
+    "pepper": ["black pepper", "ground pepper"],
     "oil": ["canola oil", "vegetable oil"],
+    "cheese": ["colby jack", "monterey jack", "cheddar", "mozzerella", "vegan cheese", "parmesian"],
+    "tomato sauce": ["marinara", "pizza sauce"],
+    "hot sauce": ["sriracha", "franks hot sauce","buffalo sauce", "chilli oil"]
 }
 
 SAMPLE_INGREDIENTS = ["yeast", "flour"]
 DEFAULT_INGREDIENTS = {"salt", "water", "oil", "pepper", "warm water", "salt and pepper", "salt pepper"}
+
+def expand_with_aliases(ingredient_set: set) -> set:
+    expanded = set(ingredient_set)
+    for ingr in ingredient_set:
+        for key, alias_list in ALIASES.items():
+            if ingr == key or ingr in alias_list:
+                expanded.add(key)
+                expanded.update(alias_list)
+    return expanded
 
 def ingredient_match_score(user_ingredients: List[str],
                            recipe_ingredients: List[str],
                            substitutions_allowed: bool,
                            user_willing_to_buy_more: bool,
                            beta: float = 0.2) -> float:
-    """
-    Compute a match score between the user's ingredients and the recipe's ingredients.
-    
-    The user's ingredient list is considered explicit. Additionally, we assume that 
-    DEFAULT_INGREDIENTS (e.g., salt, water, oil, etc.) are always available.
-    
-    When the user is NOT willing to buy extra groceries (user_willing_to_buy_more is False):
-      - The recipe is only acceptable if every non-default ingredient in the recipe is already in 
-        the user's explicit ingredients (ignoring DEFAULT_INGREDIENTS).
-      - If this condition is met, the function returns 1.0 (a perfect match).
-      - Otherwise, it returns 0.
-    
-    When the user IS willing to buy extra ingredients:
-      - A flexible (partial match) score is computed:
-          - Each direct match (ingredient found in the augmented set of user's ingredients) contributes 1.
-          - Each valid substitution (if allowed) contributes 0.5.
-          - The base score is the sum divided by the total number of recipe ingredients.
-          - A bonus factor is applied (using beta) based on the fraction of the user's explicit 
-            ingredients used by the recipe.
-    
-    The final score is capped at 1.
-    """
-    # Normalize user ingredients.
     user_explicit = set(i.lower().strip() for i in user_ingredients)
-    # Augmented user set: assume defaults are available.
-    augmented_user_set = user_explicit | DEFAULT_INGREDIENTS
+    augmented_user_set = expand_with_aliases(user_explicit | DEFAULT_INGREDIENTS)
 
-    # For strict matching, consider only non-default ingredients in the recipe.
-    recipe_non_default = {r.lower().strip() for r in recipe_ingredients if r.lower().strip() not in DEFAULT_INGREDIENTS}
+    recipe_normalized = set()
+    for r in recipe_ingredients:
+        r_norm = r.lower().strip()
+        recipe_normalized.add(r_norm)
+        recipe_normalized = expand_with_aliases(recipe_normalized)
 
-    # If the user is NOT willing to buy more, then the recipe must use only ingredients the user already has.
     if not user_willing_to_buy_more:
-        if not recipe_non_default.issubset(user_explicit):
+        if not recipe_normalized.issubset(augmented_user_set):
             return 0.0
-        else:
-            return 1.0  # Perfect match if all non-default ingredients are already in user's pantry.
-    
-    # Otherwise, if the user is willing to buy more, compute a flexible match score.
-    total = len(recipe_ingredients)
-    if total == 0:
+        return 1.0
+
+    total_recipe_ingredients = len(recipe_normalized)
+    if total_recipe_ingredients == 0:
         return 1.0
 
     matched = 0.0
-    for ingr in recipe_ingredients:
-        ingr_norm = ingr.lower().strip()
-        if ingr_norm in augmented_user_set:
+    for ingr in recipe_normalized:
+        if ingr in augmented_user_set:
             matched += 1.0
-        elif substitutions_allowed and ingr_norm in SUBSTITUTIONS:
-            if any(sub.lower().strip() in augmented_user_set for sub in SUBSTITUTIONS[ingr_norm]):
-                matched += 0.5
+        elif substitutions_allowed:
+            for key, subs in SUBSTITUTIONS.items():
+                if ingr == key or ingr in subs:
+                    if any(sub in augmented_user_set for sub in subs + [key]):
+                        matched += 0.5
+                        break
 
-    base_score = matched / total
+    base_score = matched / total_recipe_ingredients
 
-    # Bonus: fraction of user's explicit ingredients that appear in the recipe.
-    if user_explicit:
-        used_explicit = sum(1 for ingr in recipe_ingredients if ingr.lower().strip() in user_explicit)
-        bonus = used_explicit / len(user_explicit)
-    else:
-        bonus = 0.0
-    bonus_factor = 1 + beta * bonus
+    # Bonus based on percentage of user's ingredients used
+    used_explicit = sum(1 for ingr in user_explicit if ingr in recipe_normalized)
+    user_coverage = used_explicit / len(user_explicit) if user_explicit else 0.0
+    bonus_factor = 1 + beta * user_coverage
 
     final_score = base_score * bonus_factor
     return min(final_score, 1.0)
@@ -136,20 +132,28 @@ def load_model_files():
     
     cuisine_clf = joblib.load(cuisine_path)
     print(f"Loaded cuisine classifier")
+
+    # Load time classifier instead of meal type
+    time_clf_path = find_file(["time_tag_classifier.joblib"], [models_dir, ai_models_dir])
+    if not time_clf_path:
+        raise FileNotFoundError("Time classifier not found")
+    time_clf = joblib.load(time_clf_path)
+    print(f"Loaded time classifier")
+
     
     # Load meal type classifier
-    meal_path = find_file(["recipe_category_clf.joblib"], [models_dir, ai_models_dir])
-    if not meal_path:
-        raise FileNotFoundError("Meal type classifier not found")
+    # meal_path = find_file(["recipe_category_clf.joblib"], [models_dir, ai_models_dir])
+    # if not meal_path:
+    #     raise FileNotFoundError("Meal type classifier not found")
     
-    meal_clf = joblib.load(meal_path)
-    print(f"Loaded meal type classifier")
+    # meal_clf = joblib.load(meal_path)
+    # print(f"Loaded meal type classifier")
     
     # Load recipe database from pickle instead of CSV
     recipe_db_path = find_file(["recipe_database.pkl"], [models_dir, ai_models_dir])
     if recipe_db_path:
         # Use the pickled recipe database if available
-        with open(recipe_db_path, "rb") as f:
+        with gzip.open(recipe_db_path, "rb") as f:
             recipe_db = pickle.load(f)
         print(f"Loaded recipe database from pickle with {len(recipe_db)} recipes")
     else:
@@ -187,20 +191,22 @@ def get_recommendations():
         print("Using sample ingredients:", prefs["ingredients"])
         
         # Extract key preferences
+        # selected_cuisine = prefs["cuisine"].lower()
+        # USER_TO_CATEGORY = {
+            # "Breakfast": "breakfast",
+            # "Full Meal": "meals", 
+            # "Sweet Treat": "sweet treat",
+            # "Snack": "snacks"
+        # }
+        # selected_meal_type = USER_TO_CATEGORY.get(prefs["meal_type"], "unknown")
+        # requested_servings = float(prefs.get("servings", 4))
         selected_cuisine = prefs["cuisine"].lower()
-        USER_TO_CATEGORY = {
-            "Breakfast": "breakfast",
-            "Full Meal": "meals", 
-            "Sweet Treat": "sweet treat",
-            "Snack": "snacks"
-        }
-        selected_meal_type = USER_TO_CATEGORY.get(prefs["meal_type"], "unknown")
-        requested_servings = float(prefs.get("servings", 4))
         user_ingredients = prefs.get("ingredients", [])
-        allow_substitutions = prefs.get("allow_substitutions", False)
-        use_grocery = prefs.get("use_grocery", False)
-        
-        print(f"Looking for {selected_cuisine} {selected_meal_type} recipes for {requested_servings} servings")
+        allow_substitutions = prefs.get("allow_substitutions", True)
+        use_grocery = prefs.get("use_grocery", True)
+        max_time = prefs.get("max_time", 60)
+
+        print(f"Looking for {selected_cuisine} recipes for {max_time} time")
         
         # ------------------------------
         # Step 1: Pre-filter recipes by cuisine and meal type 
@@ -233,20 +239,38 @@ def get_recommendations():
         recipe_db['predicted_cuisine'] = cuisines
         
         # Predict meal type for all recipes
-        print("Predicting meal type for recipes...")
-        meal_types = []
+        # print("Predicting meal type for recipes...")
+        # meal_types = []
+        # for i in range(0, len(recipe_db), batch_size):
+        #     batch = recipe_db['full_text'].iloc[i:i+batch_size].tolist()
+        #     predictions = meal_clf.predict(batch)
+        #     meal_types.extend(predictions)
+        # recipe_db['predicted_meal_type'] = meal_types
+
+        print("Predicting time for recipes...")
+        time_preds = []
         for i in range(0, len(recipe_db), batch_size):
-            batch = recipe_db['full_text'].iloc[i:i+batch_size].tolist()
-            predictions = meal_clf.predict(batch)
-            meal_types.extend(predictions)
-        recipe_db['predicted_meal_type'] = meal_types
+            batch = recipe_db['name'].iloc[i:i+batch_size].tolist()
+            batch_preds = time_clf.predict(batch)
+            time_preds.extend(batch_preds)
+        recipe_db['predicted_time'] = time_preds
+
+        if selected_cuisine != "any cuisine":
+            recipe_db = recipe_db[recipe_db['predicted_cuisine'].str.lower() == selected_cuisine]
+
+        if max_time <= 15:
+            time_label = "under_15"
+        elif max_time <= 30:
+            time_label = "under_30"
+        elif max_time <= 60:
+            time_label = "under_60"
+        else:
+            time_label = "any"
+
+        recipe_db = recipe_db[recipe_db['predicted_time'] == time_label]
         
         # Filter by cuisine and meal type
-        matching_recipes = recipe_db[
-            (recipe_db['predicted_cuisine'].str.lower() == selected_cuisine) & 
-            (recipe_db['predicted_meal_type'].str.lower() == selected_meal_type)
-        ]
-        
+        matching_recipes = recipe_db
         print(f"Found {len(matching_recipes)} recipes matching {selected_cuisine} {selected_meal_type}")
         
         if len(matching_recipes) == 0:

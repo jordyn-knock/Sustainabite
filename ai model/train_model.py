@@ -10,6 +10,7 @@ import joblib
 import tensorflow as tf
 from tensorflow.keras.layers import Input, Dense, Embedding, GlobalAveragePooling1D, Concatenate, TextVectorization
 from tensorflow.keras.models import Model
+import gzip
 
 # -----------------------------
 # Import user preferences from your UI module
@@ -218,8 +219,8 @@ history = model.fit(
 # Extract essential recipe data to save alongside model
 recipes_essential = recipes[['id', 'name', 'ingredients', 'ingredients_raw', 'steps', 'servings']]
 
-with open("recipe_database.pkl", "wb") as f:
-    pickle.dump(recipes_essential, f)
+with gzip.open("recipe_database.pkl.gz", "wb") as f:
+    pickle.dump(recipes_essential, f) 
 
 with open("le_recipe.pkl", "wb") as f:
     pickle.dump(le_recipe, f)

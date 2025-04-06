@@ -6,8 +6,8 @@ import pandas as pd
 import os
 from pathlib import Path
 
-THRESHOLD = 0.001  # Default threshold value
-TOP_K = 20  # Default top_k value
+THRESHOLD = 0.02  # Default threshold value
+TOP_K = 7  # Default top_k value
 
 class FoodRecognizer:
     def __init__(self, model_name="openai/clip-vit-base-patch32",

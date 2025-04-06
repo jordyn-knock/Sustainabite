@@ -139,44 +139,25 @@ def render_generator_tab():
     if st.session_state.current_ingredients:
         st.subheader("Here's what I see:")
         
-        # Create a container for the detected ingredients with a light gray background
-        with st.container():
-            st.markdown("""
-            <style>
-            .ingredient-box {
-                background-color: #f0f2f6;
-                border-radius: 5px;
-                padding: 10px;
-                margin-bottom: 10px;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-            
-            st.markdown('<div class="ingredient-box">', unsafe_allow_html=True)
-            
-            # Use small columns to make buttons more compact
-            num_cols = 5  # More columns for a more compact layout
-            cols = st.columns(num_cols)
-            
-            ingredients_to_remove = []
-            
-            # Arrange ingredients in columns
-            for i, ingredient in enumerate(st.session_state.current_ingredients):
-                with cols[i % num_cols]:
-                    # Create smaller buttons with just an X and the ingredient name
-                    if st.button(f"❌ {ingredient}", key=f"del_{i}", 
-                                use_container_width=True):
-                        ingredients_to_remove.append(ingredient)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Remove ingredients that were deleted
-            if ingredients_to_remove:
-                st.session_state.current_ingredients = [
-                    ing for ing in st.session_state.current_ingredients 
-                    if ing not in ingredients_to_remove
-                ]
-                st.rerun()
+        # Simple display of ingredients without custom CSS
+        ingredients_to_remove = []
+        
+        # Create a clean layout with multiple columns - without custom styling
+        cols = st.columns(4)  # Use 4 columns for a compact layout
+        
+        for i, ingredient in enumerate(st.session_state.current_ingredients):
+            with cols[i % 4]:
+                # Create a compact button with smaller text
+                if st.button(f"❌ {ingredient}", key=f"del_{i}", use_container_width=True):
+                    ingredients_to_remove.append(ingredient)
+        
+        # Remove ingredients that were deleted
+        if ingredients_to_remove:
+            st.session_state.current_ingredients = [
+                ing for ing in st.session_state.current_ingredients 
+                if ing not in ingredients_to_remove
+            ]
+            st.rerun()
     
         # Add new ingredients manually
         new_ingredient = st.text_input("Want to add or remove anything? (comma-separated)")
@@ -282,7 +263,8 @@ def render_generator_tab():
                 save_favourites(st.session_state.favourites)
                 st.success("Recipe saved to favourites!")
 
-            if other_recs is not None and not other_recs.empty:
+            if other_recs is not None and len(other_recs) > 0:
                 st.markdown("### Other Recommended Recipes")
                 for _, recipe in other_recs.iterrows():
-                    st.markdown(f"- **{recipe['name']}** (Score: {recipe['ingredient_score']:.2f})")
+                    score = recipe.get('ingredient_score', 0)
+                    st.markdown(f"- **{recipe['name']}** (Score: {score:.2f})")

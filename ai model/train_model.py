@@ -187,16 +187,29 @@ history = model.fit(
 # Extract essential recipe data to save alongside model
 recipes_essential = recipes[['id', 'name', 'ingredients', 'ingredients_raw', 'steps', 'servings']]
 
-# Save this alongside your other model files
+
 with open("recipe_database.pkl", "wb") as f:
     pickle.dump(recipes_essential, f)
 
-# Save the model and preprocessing objects.
-model.save("recipe_model.h5")
+
 with open("le_recipe.pkl", "wb") as f:
     pickle.dump(le_recipe, f)
-with open("X_servings.pkl", "wb") as f:
-    pickle.dump(X_servings, f)
-tf.saved_model.save(vectorizer, "text_vectorizer")
 
-print("Model and preprocessing objects saved.")
+
+model.export("recipe_model_tf")
+
+print("✅ Model and preprocessing objects saved in TensorFlow SavedModel format ('recipe_model_tf')")
+
+# # Save this alongside your other model files
+# with open("recipe_database.pkl", "wb") as f:
+#     pickle.dump(recipes_essential, f)
+
+# # Save the model and preprocessing objects.
+# model.save("recipe_model.h5")
+# with open("le_recipe.pkl", "wb") as f:
+#     pickle.dump(le_recipe, f)
+# with open("X_servings.pkl", "wb") as f:
+#     pickle.dump(X_servings, f)
+# tf.saved_model.save(vectorizer, "text_vectorizer")
+
+# print("Model and preprocessing objects saved.")

@@ -6,29 +6,15 @@ import pickle
 from typing import List, Dict, Tuple, Any
 import os
 
-# from userinputs import get_user_preferences
 
-def get_user_preferences():
-    """Returns user preferences from UI or mock data for testing"""
-    return {
-        "max_time": 60,  # minutes
-        "cuisine": "Italian",  # Italian, Mexican, Asian, etc.
-        "meal_type": "Full Meal",  # maps to "meals"
-        "servings": 4,
-        "use_grocery": True,  # willing to buy ingredients
-        "allow_substitutions": True,  # allow ingredient substitutions
-        "ingredients": [
-            "pasta", "tomato sauce", "cheese", "garlic", "olive oil",
-            "basil", "salt", "pepper", "onion"
-        ]
-    }
+from userinputs import get_user_preferences
 
 # Substitutions dictionary
 SUBSTITUTIONS = {
     "milk": ["almond milk", "soy milk", "oat milk", "coconut milk"],
     "butter": ["margarine", "coconut oil", "olive oil"],
     "sugar": ["honey", "maple syrup", "agave nectar", "brown sugar"],
-    "egg": ["egg substitute"],
+    "egg": ["egg substitute, flax egg"],
     "flour": ["almond flour", "coconut flour", "whole wheat flour"],
     "salt": ["sea salt", "kosher salt"],
     "baking powder": ["baking soda"],
@@ -61,14 +47,23 @@ def load_model_files():
     # Try different possible paths for files
     models_dir = "."
     ai_models_dir = "ai model"
+
+    model_dir = os.path.join(ai_models_dir, "recipe_model_tf")
+    if not os.path.exists(model_dir):
+        raise FileNotFoundError("SavedModel directory not found: " + model_dir)
     
-    # Load main recommendation model
-    model_path = find_file(["recipe_model.h5"], [models_dir, ai_models_dir])
-    if not model_path:
-        raise FileNotFoundError("Recipe model file not found")
     
-    model = tf.keras.models.load_model(model_path)
-    print(f"Loaded recommendation model from {model_path}")
+    # # Load main recommendation model
+    # model_path = find_file(["recipe_model.h5"], [models_dir, ai_models_dir])
+    # if not model_path:
+    #     raise FileNotFoundError("Recipe model file not found")
+    
+    model = tf.saved_model.load(model_dir)
+    # Extract the serving signature as 'infer'
+    infer = model.signatures["serving_default"]
+    print("Signature inputs:", infer.structured_input_signature)
+    print("Signature outputs:", infer.structured_outputs)
+   
     
     # Load label encoder
     le_path = find_file(["le_recipe.pkl"], [models_dir, ai_models_dir])
@@ -78,14 +73,7 @@ def load_model_files():
     with open(le_path, "rb") as f:
         le_recipe = pickle.load(f)
     print(f"Loaded label encoder with {len(le_recipe.classes_)} classes")
-    
-    # Load text vectorizer
-    vectorizer_path = find_file(["text_vectorizer"], [models_dir, ai_models_dir])
-    if not vectorizer_path:
-        raise FileNotFoundError("Text vectorizer not found")
-    
-    vectorizer = tf.saved_model.load(vectorizer_path)
-    print(f"Loaded text vectorizer")
+
     
     # Load cuisine classifier
     cuisine_path = find_file(["cuisine_clf.joblib"], [models_dir, ai_models_dir])
@@ -119,7 +107,7 @@ def load_model_files():
         recipe_db = pd.read_csv(recipe_path)
         print(f"Loaded recipe database from CSV with {len(recipe_db)} recipes")
     
-    return model, le_recipe, vectorizer, cuisine_clf, meal_clf, recipe_db
+    return infer, le_recipe, cuisine_clf, meal_clf, recipe_db
 
 def find_file(filenames, directories):
     """Helper function to find a file in multiple possible directories"""
@@ -134,7 +122,7 @@ def get_recommendations():
     """Generate recipe recommendations based on user preferences"""
     try:
         # Load all model files
-        model, le_recipe, vectorizer, cuisine_clf, meal_clf, recipe_db = load_model_files()
+        infer, le_recipe, cuisine_clf, meal_clf, recipe_db = load_model_files()
         
         # Get user preferences
         prefs = get_user_preferences()
@@ -237,8 +225,20 @@ def get_recommendations():
         
         # Get model predictions
         print("Getting model predictions...")
-        predictions = model.predict([X_text, X_servings], verbose=0)
-        
+        # Ensure X_text_tensor and X_servings_tensor are defined as tensors
+# For example, if X_text and X_servings are numpy arrays:
+        X_text_tensor = tf.constant(X_text.reshape(-1, 1), dtype=tf.string)
+        X_servings_tensor = tf.constant(X_servings.reshape(-1, 1), dtype=tf.float32)
+
+        inputs = {
+            "full_text": X_text_tensor,
+            "servings": X_servings_tensor
+        }
+# Call the serving function; adjust "output_0" if your model uses a different output key.
+        predictions = infer(**inputs)["output_0"].numpy()
+
+
+
         # Get recipe IDs from model
         recipe_ids = le_recipe.classes_
         
@@ -283,9 +283,9 @@ if __name__ == "__main__":
     if top_recipe is not None:
         print("\n--- TOP RECOMMENDATION ---")
         print(f"Recipe: {top_recipe['name']}")
-        print(f"Ingredients: {top_recipe['ingredients']}")
-        print(f"Ingredient match score: {top_recipe['ingredient_score']:.2f}")
-        print(f"Steps: {top_recipe['steps']}")
+        print(f"\nIngredients: {top_recipe['ingredients']}")
+        print(f"\nIngredient match score: {top_recipe['ingredient_score']:.2f}")
+        print(f"\nSteps: {top_recipe['steps']}")
         
         if len(other_recipes) > 0:
             print("\n--- OTHER RECOMMENDATIONS ---")

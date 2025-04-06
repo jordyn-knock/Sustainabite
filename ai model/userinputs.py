@@ -36,3 +36,6 @@ def get_user_preferences():
         "allow_substitutions": allow_substitutions
     }
 
+# Simply print the returned dictionary without altering the function code.
+if __name__ == "__main__":
+    print(get_user_preferences())

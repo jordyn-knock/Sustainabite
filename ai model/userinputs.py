@@ -13,7 +13,8 @@ def get_user_preferences():
 
     saved = st.session_state.get("user_preferences", {})
 
-    max_time = st.slider("Maximum cooking time (minutes)", 5, 120, saved.get("max_time", 30))
+    time_options = [15,30,60,90]
+    max_time = st.selectbox("Maximum cooking time (minutes)", time_options, index=time_options.index(saved.get("max_time", "30")))
 
     cuisine_options = sorted([
         "american", "caribbean", "chinese", "french", "german", "greek",

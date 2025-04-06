@@ -1,9 +1,15 @@
+import os
+import logging
+
 import streamlit as st
 from pantry_tab import render_pantry_tab
 from generator_tab import render_generator_tab
 from favourites_tab import render_favourites_tab
 from storage import load_favourites
 from PIL import Image
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+logging.getLogger('streamlit').setLevel(logging.ERROR)
 
 st.set_page_config(page_title="Sustainabite", layout="centered")
 

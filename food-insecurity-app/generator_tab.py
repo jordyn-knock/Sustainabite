@@ -239,8 +239,22 @@ def render_generator_tab():
             st.write("### Ingredients")
             st.write(", ".join(top_recipe["ingredients"]))
             st.write("### Steps")
-            for i, step in enumerate(top_recipe["steps"], 1):
-                st.write(f"{i}. {step}")
+            try:
+                # First, try to safely evaluate the steps string into a list
+                steps = eval(top_recipe["steps"]) if isinstance(top_recipe["steps"], str) else top_recipe["steps"]
+                
+                # Ensure steps is a list
+                if isinstance(steps, list):
+                    for i, step in enumerate(steps, 1):
+                        st.write(f"{i}. {step}")
+                else:
+                    # Fallback if steps is not a list
+                    st.write(top_recipe["steps"])
+            except Exception as e:
+                # Fallback error handling
+                st.write("Error parsing recipe steps")
+                print(f"Steps parsing error: {e}")
+                print(f"Original steps: {top_recipe['steps']}")
 
             if st.button("Save to Favourites"):
                 if "favourites" not in st.session_state:

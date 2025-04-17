@@ -2,8 +2,6 @@
 [![Sustainabite Demo](https://github.com/jordyn-knock/Sustainabite/blob/main/logo.png)](https://youtu.be/uauizPwLQWU)
 Click to see a demo!
 
--> How might we transform surplus and wasted food into a valuable resource for food-insecure communities?
-
 ## Our Focus
 Target user -> Students, struggling with food waste and budgets while adapting to cooking for themselves!
 

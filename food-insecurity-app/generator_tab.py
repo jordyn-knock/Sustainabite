@@ -20,7 +20,7 @@ print(f"Added to path: {image_recognition_path}")
 # Import user preferences (we still rely on those for user checks)
 from userinputs import get_user_preferences
 
-# We skip the ML pipeline, so we don't actually need get_recommendations
+# We skip the ML pipeline, so no need for get_recommendation
 # from get_recommendation import get_recommendations
 
 # Import the FoodRecognizer class - with error handling for debugging
@@ -75,10 +75,7 @@ def render_generator_tab():
     
     # --- Reset everything if we detect a newly uploaded file ---
     # If the user just selected or changed the file, clear out old ingredients and flags.
-    # (We rely on st.session_state.ingredient_uploader to detect a new file.)
     if uploaded_file:
-        # Compare to a stored reference if you want to confirm it changed,
-        # but simplest approach: always reset on each upload
         st.session_state.current_ingredients = []
         st.session_state.ingredient_processed = False
         st.session_state.test_image_name = None
@@ -92,13 +89,15 @@ def render_generator_tab():
 
         file_name = os.path.basename(uploaded_file.name)
         if file_name in TEST_IMAGES:
+            # Hard-coded path
             recognized_ingredients = TEST_IMAGES[file_name]["ingredients"]
             try:
                 image = Image.open(uploaded_file).convert("RGB")
-                st.image(image, caption="Uploaded Image ", use_container_width=True)
+                st.image(image, caption="Uploaded Image", use_container_width=True)
             except Exception:
                 pass
             
+            # Add recognized (hard-coded) ingredients
             for ingredient in recognized_ingredients:
                 if ingredient not in st.session_state.current_ingredients:
                     st.session_state.current_ingredients.append(ingredient)
@@ -172,18 +171,23 @@ def render_generator_tab():
             ]
             st.rerun()
     
+        # Let the user add or remove custom ingredients
         new_ingredient = st.text_input("Want to add or remove anything? (comma-separated)")
         if new_ingredient and st.button("Update Ingredients"):
+            # Process additions
             additions = [x.strip().lower() for x in new_ingredient.split(",") 
                          if x.strip() and not x.strip().startswith("-")]
             
+            # Process removals (indicated with a '-' prefix)
             removals = [x.strip().lower()[1:] for x in new_ingredient.split(",") 
                         if x.strip() and x.strip().startswith("-")]
             
+            # Add new items
             for ing in additions:
                 if ing and ing not in st.session_state.current_ingredients:
                     st.session_state.current_ingredients.append(ing)
             
+            # Remove items
             st.session_state.current_ingredients = [
                 ing for ing in st.session_state.current_ingredients 
                 if ing not in removals
@@ -224,21 +228,25 @@ def render_generator_tab():
 
         # If recognized test image, show the 5 "least-to-most waste" recipes
         if st.session_state.test_image_name in TEST_IMAGES:
-            st.subheader("Recipes ")
+            st.subheader("Recipes")
             recipes = TEST_IMAGES[st.session_state.test_image_name]["recipes"]
             
             for idx, recipe_data in enumerate(recipes, start=1):
                 st.write(f"**{idx}.** {recipe_data.get('title','No Title')}")
+                # Time
                 if "time" in recipe_data:
                     st.write(f"_Time_: {recipe_data['time']}")
+                # Optional image
                 if "image_url" in recipe_data and recipe_data["image_url"]:
                     st.image(recipe_data["image_url"], width=300)
+                # Ingredients
                 if "ingredients" in recipe_data and recipe_data["ingredients"]:
                     st.write("**Ingredients:**")
                     for ing in recipe_data["ingredients"]:
                         name = ing.get("name", "")
                         amt = ing.get("amount", "")
                         st.write(f"- {amt} {name}")
+                # Steps
                 if "steps" in recipe_data and recipe_data["steps"]:
                     st.write("**Steps:**")
                     for s_idx, step in enumerate(recipe_data["steps"], start=1):

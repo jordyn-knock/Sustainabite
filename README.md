@@ -1,6 +1,6 @@
-YOUCODE - SAP CASE - FOOD STASH
+# Sustainabite
 [![Sustainabite Demo](https://github.com/jordyn-knock/Sustainabite/blob/main/logo.png)](https://youtu.be/uauizPwLQWU)
-
+Click to see a demo!
 
 -> How might we transform surplus and wasted food into a valuable resource for food-insecure communities?
 
